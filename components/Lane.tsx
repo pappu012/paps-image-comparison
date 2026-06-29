@@ -44,6 +44,7 @@ interface Props {
   onCursorMove?: (pos: CursorPos) => void;
   onAddStickyGuide?: (x: number, y: number) => void;
   onRemoveStickyGuide?: (id: string) => void;
+  onUpdateStickyGuide?: (id: string, color: string) => void;
   onSetAsset: (file: File) => void;
   onSetHtmlFolder: (entries: HtmlFolderEntry[]) => void;
   onSetUrl: (url: string) => void;
@@ -68,6 +69,7 @@ export default function Lane({
   onCursorMove,
   onAddStickyGuide,
   onRemoveStickyGuide,
+  onUpdateStickyGuide,
   onSetAsset,
   onSetHtmlFolder,
   onSetUrl,
@@ -84,6 +86,7 @@ export default function Lane({
 
   const [dragging, setDragging] = useState(false);
   const [hoveredGuideId, setHoveredGuideId] = useState<string | null>(null);
+  const [colorPickingId, setColorPickingId] = useState<string | null>(null);
   const [laneDropOver, setLaneDropOver] = useState(false);
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelDraft, setLabelDraft] = useState(lane.label);
@@ -656,7 +659,7 @@ export default function Lane({
                   style={{
                     position: "absolute", left: 0, right: 0,
                     top: `${g.y * 100}%`, height: 1,
-                    background: "rgba(80, 200, 255, 0.9)",
+                    background: g.color,
                     boxShadow: "0 0 0 0.5px rgba(0,0,0,0.6)",
                     transform: "translateY(-0.5px)",
                   }}
@@ -665,7 +668,7 @@ export default function Lane({
                   style={{
                     position: "absolute", top: 0, bottom: 0,
                     left: `${g.x * 100}%`, width: 1,
-                    background: "rgba(80, 200, 255, 0.9)",
+                    background: g.color,
                     boxShadow: "0 0 0 0.5px rgba(0,0,0,0.6)",
                     transform: "translateX(-0.5px)",
                   }}
@@ -681,26 +684,54 @@ export default function Lane({
                     zIndex: 25,
                   }}
                   onMouseEnter={() => setHoveredGuideId(g.id)}
-                  onMouseLeave={() => setHoveredGuideId(null)}
+                  onMouseLeave={() => { if (colorPickingId !== g.id) setHoveredGuideId(null); }}
                 >
-                  {hoveredGuideId === g.id ? (
-                    <button
-                      onClick={() => onRemoveStickyGuide?.(g.id)}
-                      style={{
-                        width: 16, height: 16, borderRadius: "50%",
-                        background: "rgba(80, 200, 255, 1)",
-                        border: "none", cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 10, color: "#000", fontWeight: "bold", lineHeight: 1,
-                      }}
-                    >
-                      ×
-                    </button>
+                  {(hoveredGuideId === g.id || colorPickingId === g.id) ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      {/* Color picker */}
+                      <div style={{ position: "relative", width: 16, height: 16 }}>
+                        <input
+                          type="color"
+                          value={g.color}
+                          onChange={(e) => onUpdateStickyGuide?.(g.id, e.target.value)}
+                          onFocus={() => setColorPickingId(g.id)}
+                          onBlur={() => { setColorPickingId(null); setHoveredGuideId(null); }}
+                          style={{
+                            position: "absolute", inset: 0,
+                            opacity: 0, width: "100%", height: "100%",
+                            cursor: "pointer", border: "none", padding: 0,
+                          }}
+                          title="Change guide color"
+                        />
+                        <div
+                          style={{
+                            width: 16, height: 16, borderRadius: "50%",
+                            background: g.color,
+                            boxShadow: "0 0 0 1.5px rgba(0,0,0,0.5)",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </div>
+                      {/* Delete */}
+                      <button
+                        onClick={() => onRemoveStickyGuide?.(g.id)}
+                        style={{
+                          width: 16, height: 16, borderRadius: "50%",
+                          background: "rgba(30,30,30,0.85)",
+                          border: "1.5px solid rgba(255,255,255,0.3)",
+                          cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, color: "#fff", fontWeight: "bold", lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   ) : (
                     <div
                       style={{
                         width: 7, height: 7, borderRadius: "50%",
-                        background: "rgba(80, 200, 255, 1)",
+                        background: g.color,
                         boxShadow: "0 0 0 1px rgba(0,0,0,0.5)",
                       }}
                     />

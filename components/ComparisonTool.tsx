@@ -26,9 +26,10 @@ export type LaneData = {
 
 export type CursorPos = { x: number; y: number } | null;
 
-export type StickyGuide = { id: string; x: number; y: number };
+export type StickyGuide = { id: string; x: number; y: number; color: string };
 
 const DEFAULT_LABELS = ["Main", "Supplied", "Created"];
+const GUIDE_COLORS = ["#50c8ff", "#ff6b6b", "#50e896", "#ffdc1e", "#c850ff", "#ff9c50"];
 
 function getAssetType(file: File): FileAsset["type"] {
   const mime = file.type;
@@ -60,11 +61,18 @@ export default function ComparisonTool() {
   const [stickyGuides, setStickyGuides] = useState<StickyGuide[]>([]);
 
   const addStickyGuide = useCallback((x: number, y: number) => {
-    setStickyGuides((prev) => [...prev, { id: Date.now().toString(), x, y }]);
+    setStickyGuides((prev) => {
+      const color = GUIDE_COLORS[prev.length % GUIDE_COLORS.length];
+      return [...prev, { id: Date.now().toString(), x, y, color }];
+    });
   }, []);
 
   const removeStickyGuide = useCallback((id: string) => {
     setStickyGuides((prev) => prev.filter((g) => g.id !== id));
+  }, []);
+
+  const updateStickyGuideColor = useCallback((id: string, color: string) => {
+    setStickyGuides((prev) => prev.map((g) => g.id === id ? { ...g, color } : g));
   }, []);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -424,6 +432,7 @@ export default function ComparisonTool() {
                 onCursorMove={setCursorPos}
                 onAddStickyGuide={addStickyGuide}
                 onRemoveStickyGuide={removeStickyGuide}
+                onUpdateStickyGuide={updateStickyGuideColor}
                 onSetAsset={(file) => setAsset(lane.id, file)}
                 onSetHtmlFolder={(entries) => setHtmlFolder(lane.id, entries)}
                 onSetUrl={(url) => setUrl(lane.id, url)}
@@ -456,6 +465,7 @@ export default function ComparisonTool() {
                 onCursorMove={setCursorPos}
                 onAddStickyGuide={addStickyGuide}
                 onRemoveStickyGuide={removeStickyGuide}
+                onUpdateStickyGuide={updateStickyGuideColor}
                 onSetAsset={(file) => setAsset(lane.id, file)}
                 onSetHtmlFolder={(entries) => setHtmlFolder(lane.id, entries)}
                 onSetUrl={(url) => setUrl(lane.id, url)}
