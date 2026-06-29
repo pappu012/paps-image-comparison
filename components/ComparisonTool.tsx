@@ -208,6 +208,17 @@ export default function ComparisonTool() {
     setLanes((prev) => prev.map((l) => ({ ...l, asset: null })));
   };
 
+  const clearGrid = () => {
+    lanes.forEach((l) => {
+      if (l.asset && l.asset.type !== "url") URL.revokeObjectURL(l.asset.url);
+    });
+    setLanes(
+      DEFAULT_LABELS.map((label, i) => ({ id: String(i), label, asset: null }))
+    );
+    setZoom(1);
+    setStickyGuides([]);
+  };
+
   const filledLanes = lanes.filter((l) => l.asset !== null);
   const imageLanes = lanes.filter((l) => l.asset?.type === "image");
   const canSlider = imageLanes.length >= 2;
@@ -331,6 +342,15 @@ export default function ComparisonTool() {
               Clear All
             </button>
           )}
+
+          <button
+            onClick={clearGrid}
+            title="Reset to default 3 lanes and clear all assets"
+            className="text-xs px-3 py-1.5 rounded transition-colors"
+            style={{ border: "1px solid var(--border)", color: "#e57373" }}
+          >
+            Clear Grid
+          </button>
 
           {/* Theme toggle */}
           <div style={{ width: 1, height: 16, background: "var(--border)", marginLeft: 2 }} />
