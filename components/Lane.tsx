@@ -215,10 +215,9 @@ export default function Lane({
 
   return (
     <div
-      className={`flex flex-col rounded-lg overflow-hidden shrink-0 ${isStacked ? "w-full" : "flex-1 min-w-0"}`}
+      className={`flex flex-col rounded-2xl overflow-hidden shrink-0 glass-card ${isStacked ? "w-full" : "flex-1 min-w-0"}`}
       style={{
-        border: `1px solid ${laneDropOver ? "rgb(255, 220, 30)" : dragging ? "var(--accent)" : "var(--border)"}`,
-        background: "var(--surface)",
+        borderColor: laneDropOver ? "rgb(255, 220, 30)" : dragging ? "var(--accent)" : "var(--border)",
         minHeight: isStacked ? "320px" : undefined,
         height: isStacked ? "320px" : isGrid ? undefined : "100%",
         transition: "border-color 0.15s ease",
@@ -245,10 +244,16 @@ export default function Lane({
     >
       {/* Lane header */}
       <div
-        className="flex items-center justify-between px-3 py-2 shrink-0"
+        className="flex items-center justify-between px-3.5 py-2.5 shrink-0"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}
       >
         <div className="flex items-center gap-2 min-w-0">
+          {lane.asset && (
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ background: "var(--accent)", boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)" }}
+            />
+          )}
           <div
             draggable
             onDragStart={(e: DragEvent<HTMLDivElement>) => {
@@ -283,7 +288,7 @@ export default function Lane({
                 setLabelDraft(lane.label);
                 setEditingLabel(true);
               }}
-              className="flex items-center gap-1 text-sm font-medium hover:underline truncate group"
+              className="flex items-center gap-1 text-sm font-semibold hover:underline truncate group"
               style={{ color: "var(--text)" }}
               title="Click to rename"
             >
@@ -307,7 +312,7 @@ export default function Lane({
 
           {lane.asset && (
             <span
-              className="text-xs px-1.5 py-0.5 rounded font-mono font-bold shrink-0"
+              className="text-xs px-2 py-0.5 rounded-full font-mono font-bold shrink-0"
               style={{ background: extColor + "22", color: extColor }}
             >
               {isFolder ? "FOLDER" : ext}
@@ -321,7 +326,7 @@ export default function Lane({
               {lane.asset.type === "url" ? (
                 <button
                   onClick={() => { setUrlDraft(lane.asset!.url); setShowUrlInput(true); }}
-                  className="text-xs px-2 py-1 rounded transition-colors"
+                  className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                   style={{ color: "var(--text-muted)" }}
                   title="Edit URL"
                 >
@@ -330,7 +335,7 @@ export default function Lane({
               ) : (
                 <button
                   onClick={() => inputRef.current?.click()}
-                  className="text-xs px-2 py-1 rounded transition-colors"
+                  className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                   style={{ color: "var(--text-muted)" }}
                   title="Replace file"
                 >
@@ -339,7 +344,7 @@ export default function Lane({
               )}
               <button
                 onClick={() => setRefreshKey((k) => k + 1)}
-                className="text-xs px-2 py-1 rounded transition-colors"
+                className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Reload"
               >
@@ -347,7 +352,7 @@ export default function Lane({
               </button>
               <button
                 onClick={onClear}
-                className="text-xs px-2 py-1 rounded transition-colors"
+                className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Clear"
               >
@@ -360,7 +365,7 @@ export default function Lane({
               <button
                 onClick={onMoveLeft}
                 disabled={!canMoveLeft}
-                className="text-xs w-6 h-6 flex items-center justify-center rounded transition-colors disabled:opacity-20"
+                className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Move lane left"
               >
@@ -369,7 +374,7 @@ export default function Lane({
               <button
                 onClick={onMoveRight}
                 disabled={!canMoveRight}
-                className="text-xs w-6 h-6 flex items-center justify-center rounded transition-colors disabled:opacity-20"
+                className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Move lane right"
               >
@@ -380,8 +385,8 @@ export default function Lane({
           {canRemove && (
             <button
               onClick={onRemove}
-              className="text-xs w-6 h-6 flex items-center justify-center rounded transition-colors"
-              style={{ color: "#e57373" }}
+              className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors hover:bg-white/5"
+              style={{ color: "#e5877a" }}
               title="Remove lane"
             >
               ⊖
@@ -417,7 +422,7 @@ export default function Lane({
           <button
             onClick={submitUrl}
             className="text-xs px-2 py-1 rounded shrink-0"
-            style={{ background: "var(--accent)", color: "#fff" }}
+            style={{ background: "var(--accent)", color: "var(--accent-text)" }}
           >
             Load
           </button>
@@ -543,10 +548,10 @@ export default function Lane({
               onDragLeave={handleDragLeave}
             >
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-2xl transition-colors"
+                className="w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-colors"
                 style={{
                   border: `2px dashed ${dragging ? "var(--accent)" : "var(--border)"}`,
-                  background: dragging ? "var(--accent)11" : "transparent",
+                  background: dragging ? "var(--accent)11" : "var(--surface-2)",
                 }}
               >
                 {dragging ? "↓" : "+"}
