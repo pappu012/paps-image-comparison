@@ -29,7 +29,7 @@ export type CursorPos = { x: number; y: number } | null;
 export type StickyGuide = { id: string; x: number; y: number; color: string };
 
 const DEFAULT_LABELS = ["Main", "Supplied", "Created"];
-const GUIDE_COLORS = ["#50c8ff", "#ff6b6b", "#50e896", "#ffdc1e", "#c850ff", "#ff9c50"];
+const DEFAULT_GUIDE_COLOR = "#ffdc1e";
 
 function RailIcon({
   active,
@@ -144,6 +144,26 @@ function IconRefresh() {
   );
 }
 
+function IconInfo() {
+  return (
+    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="10" r="7.2" />
+      <path d="M10 9v5" />
+      <circle cx="10" cy="6.5" r="0.15" fill="currentColor" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function IconMagnifier() {
+  return (
+    <svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8.5" cy="8.5" r="5.5" />
+      <path d="M16.5 16.5 13 13" />
+      <path d="M8.5 6v5M6 8.5h5" />
+    </svg>
+  );
+}
+
 function getAssetType(file: File): FileAsset["type"] {
   const mime = file.type;
   if (mime.startsWith("image/")) return "image";
@@ -172,12 +192,15 @@ export default function ComparisonTool() {
   const [showGuides, setShowGuides] = useState(false);
   const [cursorPos, setCursorPos] = useState<CursorPos>(null);
   const [stickyGuides, setStickyGuides] = useState<StickyGuide[]>([]);
+  const [showMagnifier, setShowMagnifier] = useState(false);
+  const [magnifierZoom, setMagnifierZoom] = useState(3);
+
+  const adjustMagnifierZoom = useCallback((delta: number) => {
+    setMagnifierZoom((z) => Math.min(8, Math.max(1.5, z + delta)));
+  }, []);
 
   const addStickyGuide = useCallback((x: number, y: number) => {
-    setStickyGuides((prev) => {
-      const color = GUIDE_COLORS[prev.length % GUIDE_COLORS.length];
-      return [...prev, { id: Date.now().toString(), x, y, color }];
-    });
+    setStickyGuides((prev) => [...prev, { id: Date.now().toString(), x, y, color: DEFAULT_GUIDE_COLOR }]);
   }, []);
 
   const removeStickyGuide = useCallback((id: string) => {
@@ -189,6 +212,10 @@ export default function ComparisonTool() {
   }, []);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [dateStr, setDateStr] = useState("");
+  const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+
+  const refreshAllPanels = () => setRefreshSignal((s) => s + 1);
 
   useEffect(() => {
     const t = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
@@ -356,7 +383,7 @@ export default function ComparisonTool() {
   const canDiff = imageLanes.length >= 2;
 
   return (
-    <div className="h-screen w-full flex items-stretch justify-center p-[0.1rem] sm:p-[0.7em] gap-1">
+    <div className="h-screen w-full flex items-stretch justify-center p-[0.05rem] sm:p-[0.3em] gap-[0.2em] ">
       {/* Icon rail */}
       <aside className="flex flex-col items-center justify-between py-4 rounded-3xl glass-panel w-17 sm:w-19 shrink-0">
         <div className="flex flex-col items-center gap-2.5 w-full px-1">
@@ -385,10 +412,40 @@ export default function ComparisonTool() {
             </span>
           </button>
         </div>
-        <div className="flex flex-col items-center gap-2.5 w-full px-1">
+        <div className="flex flex-col items-center gap-2.5 w-full px-1 relative">
+          <RailIcon active={showInfoPopup} title="Lanes & supported formats" label="Info" onClick={() => setShowInfoPopup((v) => !v)}>
+            <IconInfo />
+          </RailIcon>
           <RailIcon title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} label="Theme" onClick={toggleTheme}>
             <IconGear />
           </RailIcon>
+
+          {showInfoPopup && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowInfoPopup(false)} />
+              <div
+                className="absolute left-full bottom-0 ml-2 z-50 w-64 rounded-2xl p-4 flex flex-col gap-3 glass-panel"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide font-medium mb-1" style={{ color: "var(--text-muted)" }}>
+                    Lanes
+                  </p>
+                  <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                    {filledLanes.length}/{lanes.length} lanes loaded
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide font-medium mb-1" style={{ color: "var(--text-muted)" }}>
+                    Supported formats
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    JPG · PNG · GIF · WEBP · SVG · MP4 · WEBM · PDF · HTML / EDM / ANIMATED HTML
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -449,6 +506,18 @@ export default function ComparisonTool() {
                 </svg>
                 Guides
               </button>
+              <button
+                onClick={() => setShowMagnifier((m) => !m)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
+                style={{
+                  background: showMagnifier ? "var(--accent)" : "transparent",
+                  color: showMagnifier ? "var(--accent-text)" : "var(--text-muted)",
+                }}
+                title={showMagnifier ? `Hide loupe (scroll to adjust ${magnifierZoom.toFixed(1)}x)` : "Show loupe — hover an image to zoom into that spot"}
+              >
+                <IconMagnifier />
+                Loupe
+              </button>
             </div>
 
             {/* Zoom */}
@@ -477,6 +546,15 @@ export default function ComparisonTool() {
                 ↺
               </button>
             </div>
+
+            <button
+              onClick={refreshAllPanels}
+              title="Refresh all panels"
+              className="icon-pill w-9 h-9"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <IconRefresh />
+            </button>
 
             {stickyGuides.length > 0 && (
               <button
@@ -525,6 +603,9 @@ export default function ComparisonTool() {
             showGuides={showGuides}
             cursorPos={cursorPos}
             onCursorMove={setCursorPos}
+            showMagnifier={showMagnifier}
+            magnifierZoom={magnifierZoom}
+            onMagnifierZoomChange={adjustMagnifierZoom}
           />
         ) : viewMode === "grid" ? (
           <div
@@ -544,6 +625,9 @@ export default function ComparisonTool() {
                 cursorPos={cursorPos}
                 stickyGuides={stickyGuides}
                 onCursorMove={setCursorPos}
+                showMagnifier={showMagnifier}
+                magnifierZoom={magnifierZoom}
+                onMagnifierZoomChange={adjustMagnifierZoom}
                 onAddStickyGuide={addStickyGuide}
                 onRemoveStickyGuide={removeStickyGuide}
                 onUpdateStickyGuide={updateStickyGuideColor}
@@ -556,6 +640,7 @@ export default function ComparisonTool() {
                 onMoveLeft={() => moveLane(lane.id, "left")}
                 onMoveRight={() => moveLane(lane.id, "right")}
                 onReorder={(fromId) => reorderLanes(fromId, lane.id)}
+                refreshSignal={refreshSignal}
               />
             ))}
           </div>
@@ -577,6 +662,9 @@ export default function ComparisonTool() {
                 cursorPos={cursorPos}
                 stickyGuides={stickyGuides}
                 onCursorMove={setCursorPos}
+                showMagnifier={showMagnifier}
+                magnifierZoom={magnifierZoom}
+                onMagnifierZoomChange={adjustMagnifierZoom}
                 onAddStickyGuide={addStickyGuide}
                 onRemoveStickyGuide={removeStickyGuide}
                 onUpdateStickyGuide={updateStickyGuideColor}
@@ -589,30 +677,12 @@ export default function ComparisonTool() {
                 onMoveLeft={() => moveLane(lane.id, "left")}
                 onMoveRight={() => moveLane(lane.id, "right")}
                 onReorder={(fromId) => reorderLanes(fromId, lane.id)}
+                refreshSignal={refreshSignal}
               />
             ))}
           </div>
         )}
         </main>
-
-        {/* Footer info */}
-        <footer
-          className="px-5 sm:px-7 py-3 text-xs shrink-0 flex items-center flex-wrap gap-2"
-          style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}
-        >
-          <span
-            className="px-3 py-1 rounded-full"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-          >
-            JPG · PNG · GIF · WEBP · SVG · MP4 · WEBM · PDF · HTML / EDM / ANIMATED HTML
-          </span>
-          <span
-            className="px-3 py-1 rounded-full ml-auto"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-          >
-            {filledLanes.length}/{lanes.length} lanes loaded
-          </span>
-        </footer>
       </div>
     </div>
   );

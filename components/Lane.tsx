@@ -42,6 +42,9 @@ interface Props {
   cursorPos?: CursorPos;
   stickyGuides?: StickyGuide[];
   onCursorMove?: (pos: CursorPos) => void;
+  showMagnifier?: boolean;
+  magnifierZoom?: number;
+  onMagnifierZoomChange?: (delta: number) => void;
   onAddStickyGuide?: (x: number, y: number) => void;
   onRemoveStickyGuide?: (id: string) => void;
   onUpdateStickyGuide?: (id: string, color: string) => void;
@@ -54,6 +57,7 @@ interface Props {
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
   onReorder?: (fromId: string) => void;
+  refreshSignal?: number;
 }
 
 export default function Lane({
@@ -67,6 +71,9 @@ export default function Lane({
   cursorPos,
   stickyGuides = [],
   onCursorMove,
+  showMagnifier,
+  magnifierZoom = 3,
+  onMagnifierZoomChange,
   onAddStickyGuide,
   onRemoveStickyGuide,
   onUpdateStickyGuide,
@@ -79,10 +86,13 @@ export default function Lane({
   onMoveLeft,
   onMoveRight,
   onReorder,
+  refreshSignal,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const isMountRef = useRef(true);
 
   const [dragging, setDragging] = useState(false);
   const [hoveredGuideId, setHoveredGuideId] = useState<string | null>(null);
@@ -99,6 +109,7 @@ export default function Lane({
   const [customW, setCustomW] = useState("1280");
   const [customH, setCustomH] = useState("800");
   const [customActive, setCustomActive] = useState(false);
+  const [showViewportPanel, setShowViewportPanel] = useState(false);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -113,6 +124,14 @@ export default function Lane({
     ro.observe(el);
     return () => ro.disconnect();
   }, [lane.asset?.type]);
+
+  useEffect(() => {
+    if (isMountRef.current) {
+      isMountRef.current = false;
+      return;
+    }
+    setRefreshKey((k) => k + 1);
+  }, [refreshSignal]);
 
   // Set webkitdirectory on folder input (not in React's type defs)
   useEffect(() => {
@@ -177,7 +196,7 @@ export default function Lane({
   const handleDragLeave = () => setDragging(false);
 
   const handleContentMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (!showGuides) return;
+    if (!showGuides && !showMagnifier) return;
     const rect = e.currentTarget.getBoundingClientRect();
     onCursorMove?.({
       x: (e.clientX - rect.left) / rect.width,
@@ -186,7 +205,50 @@ export default function Lane({
   };
 
   const handleContentMouseLeave = () => {
-    if (showGuides) onCursorMove?.(null);
+    if (showGuides || showMagnifier) onCursorMove?.(null);
+  };
+
+  // Native (non-passive) listener so preventDefault actually stops the panel from scrolling while adjusting loupe zoom
+  useEffect(() => {
+    const el = contentAreaRef.current;
+    if (!el) return;
+    const handler = (e: globalThis.WheelEvent) => {
+      if (!showMagnifier || !onMagnifierZoomChange || lane.asset?.type !== "image") return;
+      e.preventDefault();
+      onMagnifierZoomChange(e.deltaY > 0 ? -0.25 : 0.25);
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [showMagnifier, onMagnifierZoomChange, lane.asset?.type]);
+
+  const MAGNIFIER_SIZE = 180;
+
+  const getMagnifierLens = () => {
+    if (!showMagnifier || !cursorPos || lane.asset?.type !== "image") return null;
+    const contRect = contentAreaRef.current?.getBoundingClientRect();
+    const imgRect = imgRef.current?.getBoundingClientRect();
+    if (!contRect || !imgRect || imgRect.width === 0 || imgRect.height === 0) return null;
+
+    const cursorPxX = cursorPos.x * contRect.width;
+    const cursorPxY = cursorPos.y * contRect.height;
+    const imgLeft = imgRect.left - contRect.left;
+    const imgTop = imgRect.top - contRect.top;
+
+    const ix = (cursorPxX - imgLeft) / imgRect.width;
+    const iy = (cursorPxY - imgTop) / imgRect.height;
+    if (ix < 0 || ix > 1 || iy < 0 || iy > 1) return null;
+
+    const bgWidth = imgRect.width * magnifierZoom;
+    const bgHeight = imgRect.height * magnifierZoom;
+
+    return {
+      left: cursorPxX - MAGNIFIER_SIZE / 2,
+      top: cursorPxY - MAGNIFIER_SIZE / 2,
+      bgWidth,
+      bgHeight,
+      bgPosX: -(ix * bgWidth) + MAGNIFIER_SIZE / 2,
+      bgPosY: -(iy * bgHeight) + MAGNIFIER_SIZE / 2,
+    };
   };
 
   const submitUrl = () => {
@@ -242,6 +304,91 @@ export default function Lane({
         }
       }}
     >
+      {/* Viewport toolbar — HTML and URL */}
+      {(lane.asset?.type === "html" || lane.asset?.type === "url") && showViewportPanel && (
+        <div
+          className="flex items-center gap-1 px-2 shrink-0 overflow-x-auto"
+          style={{
+            borderBottom: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            height: 30,
+            minHeight: 30,
+          }}
+        >
+          {(
+            [
+              { label: "Auto", w: null,  h: null  },
+              { label: "375",  w: 375,   h: 812   },
+              { label: "768",  w: 768,   h: 1024  },
+              { label: "1280", w: 1280,  h: 800   },
+              { label: "1440", w: 1440,  h: 900   },
+            ] as { label: string; w: number | null; h: number | null }[]
+          ).map((preset) => {
+            const isActive = !customActive && viewportW === preset.w && viewportH === preset.h;
+            return (
+              <button
+                key={preset.label}
+                onClick={() => { setViewportW(preset.w); setViewportH(preset.h); setCustomActive(false); }}
+                className="shrink-0 rounded transition-colors"
+                style={{
+                  fontSize: 11,
+                  padding: "1px 7px",
+                  background: isActive ? "var(--accent)" : "transparent",
+                  color: isActive ? "#fff" : "var(--text-muted)",
+                }}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+
+          <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 3px", flexShrink: 0 }} />
+
+          <input
+            type="number"
+            value={customW}
+            min={100}
+            max={3840}
+            title="Custom width (px)"
+            onChange={(e) => {
+              setCustomW(e.target.value);
+              const w = parseInt(e.target.value);
+              const h = parseInt(customH);
+              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
+            }}
+            style={{
+              width: 64, fontSize: 11, textAlign: "center",
+              padding: "1px 4px", borderRadius: 3, outline: "none",
+              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
+              border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
+              color: "var(--text)",
+            }}
+          />
+          <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>×</span>
+          <input
+            type="number"
+            value={customH}
+            min={100}
+            max={2160}
+            title="Custom height (px)"
+            onChange={(e) => {
+              setCustomH(e.target.value);
+              const w = parseInt(customW);
+              const h = parseInt(e.target.value);
+              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
+            }}
+            style={{
+              width: 64, fontSize: 11, textAlign: "center",
+              padding: "1px 4px", borderRadius: 3, outline: "none",
+              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
+              border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
+              color: "var(--text)",
+            }}
+          />
+          <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginLeft: 1 }}>px</span>
+        </div>
+      )}
+
       {/* Lane header */}
       <div
         className="flex items-center justify-between px-3.5 py-2.5 shrink-0"
@@ -350,6 +497,16 @@ export default function Lane({
               >
                 ↻
               </button>
+              {(lane.asset.type === "html" || lane.asset.type === "url") && (
+                <button
+                  onClick={() => setShowViewportPanel((v) => !v)}
+                  className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
+                  style={{ color: showViewportPanel ? "var(--accent)" : "var(--text-muted)" }}
+                  title={showViewportPanel ? "Hide custom size" : "Custom size"}
+                >
+                  ⛶
+                </button>
+              )}
               <button
                 onClick={onClear}
                 className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
@@ -436,91 +593,6 @@ export default function Lane({
         </div>
       )}
 
-      {/* Viewport toolbar — HTML and URL */}
-      {(lane.asset?.type === "html" || lane.asset?.type === "url") && (
-        <div
-          className="flex items-center gap-1 px-2 shrink-0 overflow-x-auto"
-          style={{
-            borderBottom: "1px solid var(--border)",
-            background: "var(--surface-2)",
-            height: 30,
-            minHeight: 30,
-          }}
-        >
-          {(
-            [
-              { label: "Auto", w: null,  h: null  },
-              { label: "375",  w: 375,   h: 812   },
-              { label: "768",  w: 768,   h: 1024  },
-              { label: "1280", w: 1280,  h: 800   },
-              { label: "1440", w: 1440,  h: 900   },
-            ] as { label: string; w: number | null; h: number | null }[]
-          ).map((preset) => {
-            const isActive = !customActive && viewportW === preset.w && viewportH === preset.h;
-            return (
-              <button
-                key={preset.label}
-                onClick={() => { setViewportW(preset.w); setViewportH(preset.h); setCustomActive(false); }}
-                className="shrink-0 rounded transition-colors"
-                style={{
-                  fontSize: 11,
-                  padding: "1px 7px",
-                  background: isActive ? "var(--accent)" : "transparent",
-                  color: isActive ? "#fff" : "var(--text-muted)",
-                }}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-
-          <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 3px", flexShrink: 0 }} />
-
-          <input
-            type="number"
-            value={customW}
-            min={100}
-            max={3840}
-            title="Custom width (px)"
-            onChange={(e) => {
-              setCustomW(e.target.value);
-              const w = parseInt(e.target.value);
-              const h = parseInt(customH);
-              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
-            }}
-            style={{
-              width: 64, fontSize: 11, textAlign: "center",
-              padding: "1px 4px", borderRadius: 3, outline: "none",
-              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
-              border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
-              color: "var(--text)",
-            }}
-          />
-          <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>×</span>
-          <input
-            type="number"
-            value={customH}
-            min={100}
-            max={2160}
-            title="Custom height (px)"
-            onChange={(e) => {
-              setCustomH(e.target.value);
-              const w = parseInt(customW);
-              const h = parseInt(e.target.value);
-              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
-            }}
-            style={{
-              width: 64, fontSize: 11, textAlign: "center",
-              padding: "1px 4px", borderRadius: 3, outline: "none",
-              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
-              border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
-              color: "var(--text)",
-            }}
-          />
-          <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginLeft: 1 }}>px</span>
-        </div>
-      )}
-
       {/* Drop zone / preview */}
       <div
         ref={contentAreaRef}
@@ -537,6 +609,7 @@ export default function Lane({
               zoom={zoom}
               viewportW={viewportW}
               viewportH={viewportH}
+              imgRef={imgRef}
             />
           ) : (
             <div
@@ -746,6 +819,56 @@ export default function Lane({
             ))}
           </div>
         )}
+
+        {/* Magnifier loupe */}
+        {(() => {
+          const lens = getMagnifierLens();
+          if (!lens) return null;
+          return (
+            <div
+              className="absolute pointer-events-none rounded-full overflow-hidden"
+              style={{
+                zIndex: 30,
+                left: lens.left,
+                top: lens.top,
+                width: MAGNIFIER_SIZE,
+                height: MAGNIFIER_SIZE,
+                border: "2px solid rgba(255,255,255,0.85)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                backgroundImage: `url(${lane.asset!.url})`,
+                backgroundRepeat: "no-repeat",
+                backgroundSize: `${lens.bgWidth}px ${lens.bgHeight}px`,
+                backgroundPosition: `${lens.bgPosX}px ${lens.bgPosY}px`,
+              }}
+            >
+              <div
+                className="absolute"
+                style={{
+                  left: "50%", top: "50%", width: 1, height: 10,
+                  background: "rgba(255,220,30,0.9)", transform: "translate(-50%, -50%)",
+                }}
+              />
+              <div
+                className="absolute"
+                style={{
+                  left: "50%", top: "50%", width: 10, height: 1,
+                  background: "rgba(255,220,30,0.9)", transform: "translate(-50%, -50%)",
+                }}
+              />
+              <div
+                className="absolute"
+                style={{
+                  left: 4, bottom: 4,
+                  background: "rgba(0,0,0,0.7)", color: "#fff",
+                  fontSize: 9, padding: "1px 4px", borderRadius: 3,
+                  fontFamily: "monospace",
+                }}
+              >
+                {magnifierZoom.toFixed(1)}x
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* File info bar */}

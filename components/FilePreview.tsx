@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { Ref, useRef, useState, useEffect } from "react";
 import { FileAsset } from "./ComparisonTool";
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   zoom: number;
   viewportW?: number | null;
   viewportH?: number | null;
+  imgRef?: Ref<HTMLImageElement>;
 }
 
 function HtmlPreview({
@@ -101,7 +102,7 @@ function HtmlPreview({
   );
 }
 
-export default function FilePreview({ asset, zoom, viewportW, viewportH }: Props) {
+export default function FilePreview({ asset, zoom, viewportW, viewportH, imgRef }: Props) {
   if (asset.type === "url") {
     return (
       <HtmlPreview
@@ -118,6 +119,7 @@ export default function FilePreview({ asset, zoom, viewportW, viewportH }: Props
       <div className="flex items-center justify-center w-full h-full">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          ref={imgRef}
           src={asset.url}
           alt={asset.file?.name ?? ""}
           style={{
