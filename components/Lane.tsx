@@ -495,7 +495,7 @@ export default function Lane({
                 style={{ color: "var(--text-muted)" }}
                 title="Reload"
               >
-                ↻
+                ↻ Reload
               </button>
               {(lane.asset.type === "html" || lane.asset.type === "url") && (
                 <button
@@ -504,7 +504,7 @@ export default function Lane({
                   style={{ color: showViewportPanel ? "var(--accent)" : "var(--text-muted)" }}
                   title={showViewportPanel ? "Hide custom size" : "Custom size"}
                 >
-                  ⛶
+                  ⛶ Size
                 </button>
               )}
               <button
@@ -513,7 +513,7 @@ export default function Lane({
                 style={{ color: "var(--text-muted)" }}
                 title="Clear"
               >
-                ✕
+                ✕ Clear
               </button>
             </>
           )}
@@ -522,31 +522,31 @@ export default function Lane({
               <button
                 onClick={onMoveLeft}
                 disabled={!canMoveLeft}
-                className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
+                className="text-xs px-2 py-1 flex items-center gap-1 rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Move lane left"
               >
-                ←
+                ← Left
               </button>
               <button
                 onClick={onMoveRight}
                 disabled={!canMoveRight}
-                className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
+                className="text-xs px-2 py-1 flex items-center gap-1 rounded-full transition-colors disabled:opacity-20 hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Move lane right"
               >
-                →
+                Right →
               </button>
             </>
           )}
           {canRemove && (
             <button
               onClick={onRemove}
-              className="text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors hover:bg-white/5"
+              className="text-xs px-2 py-1 flex items-center gap-1 rounded-full transition-colors hover:bg-white/5"
               style={{ color: "#e5877a" }}
               title="Remove lane"
             >
-              ⊖
+              ⊖ Remove
             </button>
           )}
         </div>
