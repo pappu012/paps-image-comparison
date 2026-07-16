@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      pages_enabled: ${{ steps.pages-status.outputs.enabled }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,17 +33,25 @@ jobs:
         run: npm ci
 
       - name: Setup Pages
+        id: pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
       - name: Build
         run: npm run build
 
+      - name: Detect Pages availability
+        id: pages-status
+        run: echo "enabled=${{ steps.pages.outcome == 'success' }}" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
+        if: steps.pages-status.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
 
   deploy:
+    if: needs.build.outputs.pages_enabled == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
