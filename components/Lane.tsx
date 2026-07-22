@@ -17,6 +17,14 @@ const ACCEPTED = [
   "text/html",
 ];
 
+const VIEWPORT_PRESETS: { label: string; w: number | null; h: number | null }[] = [
+  { label: "Auto", w: null, h: null },
+  { label: "375", w: 375, h: 812 },
+  { label: "768", w: 768, h: 1024 },
+  { label: "1280", w: 1280, h: 800 },
+  { label: "1440", w: 1440, h: 900 },
+];
+
 const TYPE_COLORS: Record<string, string> = {
   JPG: "#e8965a",
   JPEG: "#e8965a",
@@ -58,6 +66,8 @@ interface Props {
   onMoveRight?: () => void;
   onReorder?: (fromId: string) => void;
   refreshSignal?: number;
+  viewportSync?: { w: number | null; h: number | null; nonce: number } | null;
+  onApplyViewportToAll?: (w: number | null, h: number | null) => void;
 }
 
 export default function Lane({
@@ -87,6 +97,8 @@ export default function Lane({
   onMoveRight,
   onReorder,
   refreshSignal,
+  viewportSync,
+  onApplyViewportToAll,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +144,20 @@ export default function Lane({
     }
     setRefreshKey((k) => k + 1);
   }, [refreshSignal]);
+
+  // Adopt a screen size broadcast from another panel's "Apply to all"
+  useEffect(() => {
+    if (!viewportSync) return;
+    const { w, h } = viewportSync;
+    setViewportW(w);
+    setViewportH(h);
+    const matchesPreset = VIEWPORT_PRESETS.some((p) => p.w === w && p.h === h);
+    setCustomActive(!matchesPreset);
+    if (!matchesPreset) {
+      if (w != null) setCustomW(String(w));
+      if (h != null) setCustomH(String(h));
+    }
+  }, [viewportSync]);
 
   // Set webkitdirectory on folder input (not in React's type defs)
   useEffect(() => {
@@ -315,15 +341,7 @@ export default function Lane({
             minHeight: 30,
           }}
         >
-          {(
-            [
-              { label: "Auto", w: null,  h: null  },
-              { label: "375",  w: 375,   h: 812   },
-              { label: "768",  w: 768,   h: 1024  },
-              { label: "1280", w: 1280,  h: 800   },
-              { label: "1440", w: 1440,  h: 900   },
-            ] as { label: string; w: number | null; h: number | null }[]
-          ).map((preset) => {
+          {VIEWPORT_PRESETS.map((preset) => {
             const isActive = !customActive && viewportW === preset.w && viewportH === preset.h;
             return (
               <button
@@ -386,6 +404,22 @@ export default function Lane({
             }}
           />
           <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginLeft: 1 }}>px</span>
+
+          <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 3px", flexShrink: 0 }} />
+
+          <button
+            onClick={() => onApplyViewportToAll?.(viewportW, viewportH)}
+            className="shrink-0 rounded transition-colors hover:bg-white/5"
+            style={{
+              fontSize: 11,
+              padding: "1px 7px",
+              color: "var(--accent)",
+              whiteSpace: "nowrap",
+            }}
+            title="Apply this screen size to every panel"
+          >
+            ⇒ Apply to all
+          </button>
         </div>
       )}
 

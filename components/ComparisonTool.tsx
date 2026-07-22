@@ -214,8 +214,13 @@ export default function ComparisonTool() {
   const [dateStr, setDateStr] = useState("");
   const [showInfoPopup, setShowInfoPopup] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [viewportSync, setViewportSync] = useState<{ w: number | null; h: number | null; nonce: number } | null>(null);
 
   const refreshAllPanels = () => setRefreshSignal((s) => s + 1);
+
+  const applyViewportToAll = useCallback((w: number | null, h: number | null) => {
+    setViewportSync((prev) => ({ w, h, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
 
   useEffect(() => {
     const t = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
@@ -641,6 +646,8 @@ export default function ComparisonTool() {
                 onMoveRight={() => moveLane(lane.id, "right")}
                 onReorder={(fromId) => reorderLanes(fromId, lane.id)}
                 refreshSignal={refreshSignal}
+                viewportSync={viewportSync}
+                onApplyViewportToAll={applyViewportToAll}
               />
             ))}
           </div>
@@ -678,6 +685,8 @@ export default function ComparisonTool() {
                 onMoveRight={() => moveLane(lane.id, "right")}
                 onReorder={(fromId) => reorderLanes(fromId, lane.id)}
                 refreshSignal={refreshSignal}
+                viewportSync={viewportSync}
+                onApplyViewportToAll={applyViewportToAll}
               />
             ))}
           </div>
