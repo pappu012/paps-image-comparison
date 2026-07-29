@@ -213,6 +213,8 @@ export default function ComparisonTool() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [dateStr, setDateStr] = useState("");
   const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const [editingZoom, setEditingZoom] = useState(false);
+  const [zoomDraft, setZoomDraft] = useState("");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [viewportSync, setViewportSync] = useState<{ w: number | null; h: number | null; nonce: number } | null>(null);
   const [sizePanelSync, setSizePanelSync] = useState<{ open: boolean; nonce: number } | null>(null);
@@ -226,6 +228,14 @@ export default function ComparisonTool() {
   const setSizePanelForAll = useCallback((open: boolean) => {
     setSizePanelSync((prev) => ({ open, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
+
+  const commitZoomDraft = () => {
+    const n = parseInt(zoomDraft, 10);
+    if (Number.isFinite(n)) {
+      setZoom(Math.min(100, Math.max(1, n)) / 100);
+    }
+    setEditingZoom(false);
+  };
 
   useEffect(() => {
     const t = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
@@ -541,7 +551,35 @@ export default function ComparisonTool() {
               >
                 −
               </button>
-              <span className="w-10 text-center">{Math.round(zoom * 100)}%</span>
+              {editingZoom ? (
+                <input
+                  autoFocus
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={zoomDraft}
+                  onChange={(e) => setZoomDraft(e.target.value)}
+                  onBlur={commitZoomDraft}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitZoomDraft();
+                    if (e.key === "Escape") setEditingZoom(false);
+                  }}
+                  className="w-10 text-center bg-transparent outline-none"
+                  style={{ color: "var(--text)", MozAppearance: "textfield" }}
+                />
+              ) : (
+                <span
+                  className="w-10 text-center cursor-text hover-text"
+                  onClick={() => {
+                    setZoomDraft(String(Math.round(zoom * 100)));
+                    setEditingZoom(true);
+                  }}
+                  title="Click to type a custom zoom (1-100%)"
+                >
+                  {Math.round(zoom * 100)}%
+                </span>
+              )}
               <button
                 onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
                 className="hover-text w-5 text-center"
