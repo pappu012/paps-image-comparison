@@ -68,6 +68,8 @@ interface Props {
   refreshSignal?: number;
   viewportSync?: { w: number | null; h: number | null; nonce: number } | null;
   onApplyViewportToAll?: (w: number | null, h: number | null) => void;
+  sizePanelSync?: { open: boolean; nonce: number } | null;
+  onSetSizePanelAll?: (open: boolean) => void;
 }
 
 export default function Lane({
@@ -99,6 +101,8 @@ export default function Lane({
   refreshSignal,
   viewportSync,
   onApplyViewportToAll,
+  sizePanelSync,
+  onSetSizePanelAll,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -158,6 +162,12 @@ export default function Lane({
       if (h != null) setCustomH(String(h));
     }
   }, [viewportSync]);
+
+  // Adopt an open/close broadcast for the size panel from another panel
+  useEffect(() => {
+    if (!sizePanelSync) return;
+    setShowViewportPanel(sizePanelSync.open);
+  }, [sizePanelSync]);
 
   // Set webkitdirectory on folder input (not in React's type defs)
   useEffect(() => {
@@ -420,6 +430,23 @@ export default function Lane({
           >
             ⇒ Apply to all
           </button>
+
+          <button
+            onClick={() => {
+              if (onSetSizePanelAll) onSetSizePanelAll(false);
+              else setShowViewportPanel(false);
+            }}
+            className="shrink-0 rounded transition-colors hover:bg-white/5"
+            style={{
+              fontSize: 11,
+              padding: "1px 7px",
+              color: "var(--text-muted)",
+              whiteSpace: "nowrap",
+            }}
+            title="Close the size panel on every panel"
+          >
+            ✕ Close Sizes
+          </button>
         </div>
       )}
 
@@ -533,10 +560,14 @@ export default function Lane({
               </button>
               {(lane.asset.type === "html" || lane.asset.type === "url") && (
                 <button
-                  onClick={() => setShowViewportPanel((v) => !v)}
+                  onClick={() => {
+                    const next = !showViewportPanel;
+                    if (onSetSizePanelAll) onSetSizePanelAll(next);
+                    else setShowViewportPanel(next);
+                  }}
                   className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                   style={{ color: showViewportPanel ? "var(--accent)" : "var(--text-muted)" }}
-                  title={showViewportPanel ? "Hide custom size" : "Custom size"}
+                  title={showViewportPanel ? "Hide custom size (all panels)" : "Custom size (all panels)"}
                 >
                   ⛶ Size
                 </button>

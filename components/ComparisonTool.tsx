@@ -215,11 +215,16 @@ export default function ComparisonTool() {
   const [showInfoPopup, setShowInfoPopup] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [viewportSync, setViewportSync] = useState<{ w: number | null; h: number | null; nonce: number } | null>(null);
+  const [sizePanelSync, setSizePanelSync] = useState<{ open: boolean; nonce: number } | null>(null);
 
   const refreshAllPanels = () => setRefreshSignal((s) => s + 1);
 
   const applyViewportToAll = useCallback((w: number | null, h: number | null) => {
     setViewportSync((prev) => ({ w, h, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
+  const setSizePanelForAll = useCallback((open: boolean) => {
+    setSizePanelSync((prev) => ({ open, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
   useEffect(() => {
@@ -648,6 +653,8 @@ export default function ComparisonTool() {
                 refreshSignal={refreshSignal}
                 viewportSync={viewportSync}
                 onApplyViewportToAll={applyViewportToAll}
+                sizePanelSync={sizePanelSync}
+                onSetSizePanelAll={setSizePanelForAll}
               />
             ))}
           </div>
@@ -687,6 +694,8 @@ export default function ComparisonTool() {
                 refreshSignal={refreshSignal}
                 viewportSync={viewportSync}
                 onApplyViewportToAll={applyViewportToAll}
+                sizePanelSync={sizePanelSync}
+                onSetSizePanelAll={setSizePanelForAll}
               />
             ))}
           </div>
