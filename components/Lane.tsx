@@ -20,10 +20,6 @@ const ACCEPTED = [
 
 const VIEWPORT_PRESETS: { label: string; w: number | null; h: number | null }[] = [
   { label: "Auto", w: null, h: null },
-  { label: "375", w: 375, h: 812 },
-  { label: "768", w: 768, h: 1024 },
-  { label: "1280", w: 1280, h: 800 },
-  { label: "1440", w: 1440, h: 900 },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
