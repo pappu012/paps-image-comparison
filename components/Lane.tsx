@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, DragEvent, MouseEvent } from "react";
 import { LaneData, CursorPos, StickyGuide } from "./ComparisonTool";
 import { HtmlFolderEntry, readDirectoryEntry } from "@/lib/htmlFolder";
 import FilePreview from "./FilePreview";
+import { PRESET_SIZE_GROUPS } from "@/lib/presetSizes";
 
 const ACCEPTED = [
   "image/jpeg",
@@ -375,6 +376,48 @@ export default function Lane({
               </button>
             );
           })}
+
+          <select
+            value=""
+            onChange={(e) => {
+              const key = e.target.value;
+              e.target.value = "";
+              if (!key) return;
+              for (const group of PRESET_SIZE_GROUPS) {
+                const size = group.sizes.find((s) => s.key === key);
+                if (size) {
+                  setViewportW(size.w);
+                  setViewportH(size.h);
+                  setCustomActive(true);
+                  setCustomW(String(size.w));
+                  setCustomH(String(size.h));
+                  break;
+                }
+              }
+            }}
+            className="shrink-0 rounded transition-colors"
+            title="Pick an ad / social / print preset size"
+            style={{
+              fontSize: 11,
+              padding: "1px 4px",
+              background: "transparent",
+              color: "var(--text-muted)",
+              border: `1px solid var(--border)`,
+              outline: "none",
+              maxWidth: 120,
+            }}
+          >
+            <option value="">Preset sizes…</option>
+            {PRESET_SIZE_GROUPS.map((group) => (
+              <optgroup key={group.category} label={group.category}>
+                {group.sizes.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label} ({s.w}×{s.h})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
 
           <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 3px", flexShrink: 0 }} />
 
