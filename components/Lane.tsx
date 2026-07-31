@@ -571,6 +571,16 @@ export default function Lane({
               {isFolder ? "FOLDER" : ext}
             </span>
           )}
+
+          {lane.asset && (isFolder || lane.asset.file) && (
+            <span
+              className="text-xs truncate min-w-0 flex-1"
+              style={{ color: "var(--text-muted)", direction: "rtl", textAlign: "left" }}
+              title={lane.asset.folderName ?? lane.asset.displayName ?? lane.asset.file?.name ?? ""}
+            >
+              {isFolder ? `${lane.asset.folderName}/` : (lane.asset.displayName ?? lane.asset.file?.name ?? "")}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">

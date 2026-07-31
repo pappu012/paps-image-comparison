@@ -579,7 +579,14 @@ export default function ComparisonTool() {
                   min={1}
                   max={100}
                   value={zoomDraft}
-                  onChange={(e) => setZoomDraft(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setZoomDraft(val);
+                    const n = parseInt(val, 10);
+                    if (Number.isFinite(n)) {
+                      setZoom(Math.min(100, Math.max(1, n)) / 100);
+                    }
+                  }}
                   onBlur={commitZoomDraft}
                   onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
