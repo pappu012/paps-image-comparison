@@ -47,6 +47,7 @@ interface Props {
   canMoveLeft?: boolean;
   canMoveRight?: boolean;
   showGuides?: boolean;
+  guideOpacity?: number;
   cursorPos?: CursorPos;
   stickyGuides?: StickyGuide[];
   onCursorMove?: (pos: CursorPos) => void;
@@ -68,8 +69,8 @@ interface Props {
   refreshSignal?: number;
   viewportSync?: { w: number | null; h: number | null; nonce: number } | null;
   onApplyViewportToAll?: (w: number | null, h: number | null) => void;
-  sizePanelSync?: { open: boolean; nonce: number } | null;
-  onSetSizePanelAll?: (open: boolean) => void;
+  sizePanelSync?: { open: boolean; nonce: number; pulse?: boolean } | null;
+  onSetSizePanelAll?: (open: boolean, pulse?: boolean) => void;
 }
 
 export default function Lane({
@@ -80,6 +81,7 @@ export default function Lane({
   canMoveLeft,
   canMoveRight,
   showGuides,
+  guideOpacity = 1,
   cursorPos,
   stickyGuides = [],
   onCursorMove,
@@ -126,6 +128,7 @@ export default function Lane({
   const [customH, setCustomH] = useState("800");
   const [customActive, setCustomActive] = useState(false);
   const [showViewportPanel, setShowViewportPanel] = useState(false);
+  const [sizeButtonPulseKey, setSizeButtonPulseKey] = useState(0);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -167,6 +170,9 @@ export default function Lane({
   useEffect(() => {
     if (!sizePanelSync) return;
     setShowViewportPanel(sizePanelSync.open);
+    if (!sizePanelSync.open && sizePanelSync.pulse) {
+      setSizeButtonPulseKey((k) => k + 1);
+    }
   }, [sizePanelSync]);
 
   // Set webkitdirectory on folder input (not in React's type defs)
@@ -433,7 +439,7 @@ export default function Lane({
 
           <button
             onClick={() => {
-              if (onSetSizePanelAll) onSetSizePanelAll(false);
+              if (onSetSizePanelAll) onSetSizePanelAll(false, true);
               else setShowViewportPanel(false);
             }}
             className="shrink-0 rounded transition-colors hover:bg-white/5"
@@ -560,13 +566,17 @@ export default function Lane({
               </button>
               {(lane.asset.type === "html" || lane.asset.type === "url") && (
                 <button
+                  key={sizeButtonPulseKey}
                   onClick={() => {
                     const next = !showViewportPanel;
                     if (onSetSizePanelAll) onSetSizePanelAll(next);
                     else setShowViewportPanel(next);
                   }}
                   className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
-                  style={{ color: showViewportPanel ? "var(--accent)" : "var(--text-muted)" }}
+                  style={{
+                    color: showViewportPanel ? "var(--accent)" : "var(--text-muted)",
+                    animation: sizeButtonPulseKey > 0 ? "vc-size-pulse 0.5s ease-in-out 5" : undefined,
+                  }}
                   title={showViewportPanel ? "Hide custom size (all panels)" : "Custom size (all panels)"}
                 >
                   ⛶ Size
@@ -762,7 +772,7 @@ export default function Lane({
 
         {/* Cursor crosshair (ephemeral) */}
         {showGuides && cursorPos && (
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 15 }}>
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 15, opacity: guideOpacity }}>
             <div
               style={{
                 position: "absolute", left: 0, right: 0,
@@ -805,6 +815,7 @@ export default function Lane({
                     background: g.color,
                     boxShadow: "0 0 0 0.5px rgba(0,0,0,0.6)",
                     transform: "translateY(-0.5px)",
+                    opacity: guideOpacity,
                   }}
                 />
                 <div
@@ -814,6 +825,7 @@ export default function Lane({
                     background: g.color,
                     boxShadow: "0 0 0 0.5px rgba(0,0,0,0.6)",
                     transform: "translateX(-0.5px)",
+                    opacity: guideOpacity,
                   }}
                 />
                 {/* Intersection handle — needs pointer events */}

@@ -28,7 +28,7 @@ export type CursorPos = { x: number; y: number } | null;
 
 export type StickyGuide = { id: string; x: number; y: number; color: string };
 
-const DEFAULT_LABELS = ["Main", "Supplied", "Created"];
+const DEFAULT_LABELS = ["Main", "Supplied"];
 const DEFAULT_GUIDE_COLOR = "#ffdc1e";
 
 function RailIcon({
@@ -190,6 +190,7 @@ export default function ComparisonTool() {
   const [viewMode, setViewMode] = useState<ViewMode>("side-by-side");
   const [zoom, setZoom] = useState(1);
   const [showGuides, setShowGuides] = useState(false);
+  const [guideOpacity, setGuideOpacity] = useState(1);
   const [cursorPos, setCursorPos] = useState<CursorPos>(null);
   const [stickyGuides, setStickyGuides] = useState<StickyGuide[]>([]);
   const [showMagnifier, setShowMagnifier] = useState(false);
@@ -217,7 +218,7 @@ export default function ComparisonTool() {
   const [zoomDraft, setZoomDraft] = useState("");
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [viewportSync, setViewportSync] = useState<{ w: number | null; h: number | null; nonce: number } | null>(null);
-  const [sizePanelSync, setSizePanelSync] = useState<{ open: boolean; nonce: number } | null>(null);
+  const [sizePanelSync, setSizePanelSync] = useState<{ open: boolean; nonce: number; pulse?: boolean } | null>(null);
 
   const refreshAllPanels = () => setRefreshSignal((s) => s + 1);
 
@@ -225,8 +226,8 @@ export default function ComparisonTool() {
     setViewportSync((prev) => ({ w, h, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
-  const setSizePanelForAll = useCallback((open: boolean) => {
-    setSizePanelSync((prev) => ({ open, nonce: (prev?.nonce ?? 0) + 1 }));
+  const setSizePanelForAll = useCallback((open: boolean, pulse?: boolean) => {
+    setSizePanelSync((prev) => ({ open, nonce: (prev?.nonce ?? 0) + 1, pulse }));
   }, []);
 
   const commitZoomDraft = () => {
@@ -380,7 +381,7 @@ export default function ComparisonTool() {
   };
 
   const clearGrid = () => {
-    if (!window.confirm("Reset to the default 3 lanes and clear all loaded assets? This can't be undone.")) return;
+    if (!window.confirm(`Reset to the default ${DEFAULT_LABELS.length} lanes and clear all loaded assets? This can't be undone.`)) return;
     lanes.forEach((l) => {
       if (l.asset && l.asset.type !== "url") URL.revokeObjectURL(l.asset.url);
     });
@@ -526,6 +527,26 @@ export default function ComparisonTool() {
                 </svg>
                 Guides
               </button>
+              {showGuides && (
+                <div
+                  className="flex items-center gap-1.5 pl-1 pr-2.5"
+                  title={`Guide line opacity: ${Math.round(guideOpacity * 100)}%`}
+                >
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    value={guideOpacity}
+                    onChange={(e) => setGuideOpacity(parseFloat(e.target.value))}
+                    className="w-14 accent-current"
+                    style={{ color: "var(--accent)" }}
+                  />
+                  <span className="w-7 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    {Math.round(guideOpacity * 100)}%
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => setShowMagnifier((m) => !m)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
@@ -628,7 +649,7 @@ export default function ComparisonTool() {
 
             <button
               onClick={clearGrid}
-              title="Reset to default 3 lanes and clear all assets"
+              title={`Reset to default ${DEFAULT_LABELS.length} lanes and clear all assets`}
               className="icon-pill w-9 h-9"
               style={{ color: "#e5877a" }}
             >
@@ -649,6 +670,7 @@ export default function ComparisonTool() {
             laneB={imageLanes[1]}
             zoom={zoom}
             showGuides={showGuides}
+            guideOpacity={guideOpacity}
             cursorPos={cursorPos}
             onCursorMove={setCursorPos}
             showMagnifier={showMagnifier}
@@ -670,6 +692,7 @@ export default function ComparisonTool() {
                 canMoveLeft={idx > 0}
                 canMoveRight={idx < lanes.length - 1}
                 showGuides={showGuides}
+                guideOpacity={guideOpacity}
                 cursorPos={cursorPos}
                 stickyGuides={stickyGuides}
                 onCursorMove={setCursorPos}
@@ -711,6 +734,7 @@ export default function ComparisonTool() {
                 canMoveLeft={idx > 0}
                 canMoveRight={idx < lanes.length - 1}
                 showGuides={showGuides}
+                guideOpacity={guideOpacity}
                 cursorPos={cursorPos}
                 stickyGuides={stickyGuides}
                 onCursorMove={setCursorPos}

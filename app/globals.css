@@ -111,3 +111,16 @@ body {
   0%, 100% { opacity: 0.4; }
   50%       { opacity: 0.9; }
 }
+
+@keyframes vc-size-pulse {
+  0%, 100% {
+    transform: scale(1);
+    color: var(--text-muted);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  50% {
+    transform: scale(1.18);
+    color: var(--accent);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}

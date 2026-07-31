@@ -8,6 +8,7 @@ interface Props {
   laneB: LaneData;
   zoom: number;
   showGuides?: boolean;
+  guideOpacity?: number;
   cursorPos?: CursorPos;
   onCursorMove?: (pos: CursorPos) => void;
   showMagnifier?: boolean;
@@ -22,6 +23,7 @@ export default function SliderComparison({
   laneB,
   zoom,
   showGuides,
+  guideOpacity = 1,
   cursorPos,
   onCursorMove,
   showMagnifier,
@@ -175,7 +177,7 @@ export default function SliderComparison({
 
         {/* Guide lines */}
         {showGuides && cursorPos && (
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 15 }}>
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 15, opacity: guideOpacity }}>
             <div
               style={{
                 position: "absolute",
