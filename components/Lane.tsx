@@ -107,6 +107,7 @@ export default function Lane({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const isMountRef = useRef(true);
 
   const [dragging, setDragging] = useState(false);
@@ -126,6 +127,17 @@ export default function Lane({
   const [customActive, setCustomActive] = useState(false);
   const [showViewportPanel, setShowViewportPanel] = useState(false);
   const [sizeButtonPulseKey, setSizeButtonPulseKey] = useState(0);
+  const [inspectMode, setInspectMode] = useState(false);
+  const [inspectPinned, setInspectPinned] = useState(false);
+  const [inspectBlocked, setInspectBlocked] = useState(false);
+  const [hoverBox, setHoverBox] = useState<{
+    margin: { left: number; top: number; width: number; height: number };
+    border: { left: number; top: number; width: number; height: number };
+    padding: { left: number; top: number; width: number; height: number };
+    content: { left: number; top: number; width: number; height: number };
+    label: string;
+    dims: string;
+  } | null>(null);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -178,6 +190,13 @@ export default function Lane({
       folderInputRef.current.setAttribute("webkitdirectory", "");
     }
   }, []);
+
+  // Reset inspector state whenever the asset changes or inspect mode is turned off
+  useEffect(() => {
+    setInspectPinned(false);
+    setInspectBlocked(false);
+    setHoverBox(null);
+  }, [lane.asset?.id, inspectMode]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -288,6 +307,95 @@ export default function Lane({
       bgPosX: -(ix * bgWidth) + MAGNIFIER_SIZE / 2,
       bgPosY: -(iy * bgHeight) + MAGNIFIER_SIZE / 2,
     };
+  };
+
+  // Locate the DOM element under the cursor inside the iframe. Returns "blocked" when the
+  // iframe is cross-origin — the browser refuses any read of its document from here.
+  const pickElementAt = (clientX: number, clientY: number) => {
+    const iframeEl = iframeRef.current;
+    if (!iframeEl) return null;
+    let doc: Document | null;
+    try {
+      doc = iframeEl.contentDocument;
+    } catch {
+      return "blocked" as const;
+    }
+    if (!doc) return "blocked" as const;
+    const iframeRect = iframeEl.getBoundingClientRect();
+    const offsetW = iframeEl.offsetWidth || 1;
+    const offsetH = iframeEl.offsetHeight || 1;
+    if (iframeRect.width === 0 || iframeRect.height === 0) return null;
+    const scaleX = iframeRect.width / offsetW;
+    const scaleY = iframeRect.height / offsetH;
+    const localX = (clientX - iframeRect.left) / scaleX;
+    const localY = (clientY - iframeRect.top) / scaleY;
+    if (localX < 0 || localY < 0 || localX > offsetW || localY > offsetH) return null;
+    let el: Element | null;
+    try {
+      el = doc.elementFromPoint(localX, localY);
+    } catch {
+      return "blocked" as const;
+    }
+    if (!el || el === doc.documentElement || el === doc.body) return null;
+    return { el, iframeRect, scaleX, scaleY };
+  };
+
+  // Build the box-model overlay (margin/border/padding/content rings) for an element,
+  // in coordinates relative to the lane's content area — mirrors the DevTools inspector.
+  const buildHighlight = (el: Element, iframeRect: DOMRect, scaleX: number, scaleY: number) => {
+    const win = el.ownerDocument.defaultView;
+    const contRect = contentAreaRef.current?.getBoundingClientRect();
+    if (!win || !contRect) return null;
+    const cs = win.getComputedStyle(el);
+    const rect = el.getBoundingClientRect(); // border box, iframe-local coords
+    const num = (v: string) => parseFloat(v) || 0;
+    const mt = num(cs.marginTop), mr = num(cs.marginRight), mb = num(cs.marginBottom), ml = num(cs.marginLeft);
+    const bt = num(cs.borderTopWidth), br = num(cs.borderRightWidth), bb = num(cs.borderBottomWidth), bl = num(cs.borderLeftWidth);
+    const pt = num(cs.paddingTop), pr = num(cs.paddingRight), pb = num(cs.paddingBottom), pl = num(cs.paddingLeft);
+
+    const box = (l: number, t: number, w: number, h: number) => ({
+      left: iframeRect.left + l * scaleX - contRect.left,
+      top: iframeRect.top + t * scaleY - contRect.top,
+      width: Math.max(0, w) * scaleX,
+      height: Math.max(0, h) * scaleY,
+    });
+
+    const classes = el.classList.length ? "." + Array.from(el.classList).join(".") : "";
+    const idStr = el.id ? `#${el.id}` : "";
+
+    return {
+      margin: box(rect.left - ml, rect.top - mt, rect.width + ml + mr, rect.height + mt + mb),
+      border: box(rect.left, rect.top, rect.width, rect.height),
+      padding: box(rect.left + bl, rect.top + bt, rect.width - bl - br, rect.height - bt - bb),
+      content: box(rect.left + bl + pl, rect.top + bt + pt, rect.width - bl - br - pl - pr, rect.height - bt - bb - pt - pb),
+      label: `${el.tagName.toLowerCase()}${idStr}${classes}`,
+      dims: `${Math.round(rect.width)} × ${Math.round(rect.height)}`,
+    };
+  };
+
+  const handleInspectMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (inspectPinned) return;
+    const picked = pickElementAt(e.clientX, e.clientY);
+    if (picked === "blocked") {
+      setInspectBlocked(true);
+      setHoverBox(null);
+      return;
+    }
+    if (!picked) {
+      setHoverBox(null);
+      return;
+    }
+    const built = buildHighlight(picked.el, picked.iframeRect, picked.scaleX, picked.scaleY);
+    setHoverBox(built);
+  };
+
+  const handleInspectMouseLeave = () => {
+    if (!inspectPinned) setHoverBox(null);
+  };
+
+  const handleInspectClick = () => {
+    if (!hoverBox && !inspectPinned) return;
+    setInspectPinned((p) => !p);
   };
 
   const submitUrl = () => {
@@ -605,6 +713,16 @@ export default function Lane({
                   ↑ Replace
                 </button>
               )}
+              {lane.asset.type === "url" && (
+                <button
+                  onClick={() => setInspectMode((v) => !v)}
+                  className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
+                  style={{ color: inspectMode ? "var(--accent)" : "var(--text-muted)" }}
+                  title={inspectMode ? "Stop inspecting elements" : "Inspect elements — hover to highlight, click to pin"}
+                >
+                  {"</> Inspect"}
+                </button>
+              )}
               <button
                 onClick={() => setRefreshKey((k) => k + 1)}
                 className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
@@ -734,6 +852,7 @@ export default function Lane({
               viewportW={viewportW}
               viewportH={viewportH}
               imgRef={imgRef}
+              iframeRef={iframeRef}
             />
           ) : (
             <div
@@ -817,6 +936,74 @@ export default function Lane({
               );
             }}
           />
+        )}
+
+        {/* Element inspector overlay — hover to highlight, click to pin (url assets only) */}
+        {inspectMode && (
+          <div
+            className="absolute inset-0"
+            style={{ zIndex: 12, cursor: "crosshair" }}
+            onMouseMove={handleInspectMouseMove}
+            onMouseLeave={handleInspectMouseLeave}
+            onClick={handleInspectClick}
+          />
+        )}
+
+        {inspectMode && inspectBlocked && !hoverBox && (
+          <div
+            className="absolute inset-0 pointer-events-none flex items-start justify-center"
+            style={{ zIndex: 13, paddingTop: 12 }}
+          >
+            <div
+              style={{
+                background: "rgba(0,0,0,0.75)",
+                color: "#f2b8a8",
+                fontSize: 11,
+                padding: "4px 10px",
+                borderRadius: 6,
+              }}
+            >
+              Can&apos;t inspect — this page is cross-origin, so the browser blocks reading its DOM
+            </div>
+          </div>
+        )}
+
+        {inspectMode && hoverBox && (
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 13 }}>
+            <div style={{ position: "absolute", left: hoverBox.margin.left, top: hoverBox.margin.top, width: hoverBox.margin.width, height: hoverBox.margin.height, background: "rgba(246, 178, 107, 0.45)" }} />
+            <div style={{ position: "absolute", left: hoverBox.border.left, top: hoverBox.border.top, width: hoverBox.border.width, height: hoverBox.border.height, background: "rgba(255, 229, 143, 0.45)" }} />
+            <div style={{ position: "absolute", left: hoverBox.padding.left, top: hoverBox.padding.top, width: hoverBox.padding.width, height: hoverBox.padding.height, background: "rgba(147, 196, 125, 0.45)" }} />
+            <div
+              style={{
+                position: "absolute",
+                left: hoverBox.content.left,
+                top: hoverBox.content.top,
+                width: hoverBox.content.width,
+                height: hoverBox.content.height,
+                background: "rgba(111, 168, 220, 0.55)",
+                boxShadow: "0 0 0 1px rgba(111, 168, 220, 0.9)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: Math.max(0, hoverBox.border.left),
+                top: Math.max(0, hoverBox.border.top - 22),
+                background: inspectPinned ? "rgba(91,141,239,0.95)" : "rgba(0,0,0,0.8)",
+                color: "#fff",
+                fontSize: 10,
+                fontFamily: "monospace",
+                padding: "2px 6px",
+                borderRadius: 4,
+                whiteSpace: "nowrap",
+                maxWidth: 260,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {inspectPinned ? "📌 " : ""}{hoverBox.label} · {hoverBox.dims}
+            </div>
+          </div>
         )}
 
         {/* Cursor crosshair (ephemeral) */}

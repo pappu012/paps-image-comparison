@@ -9,6 +9,7 @@ interface Props {
   viewportW?: number | null;
   viewportH?: number | null;
   imgRef?: Ref<HTMLImageElement>;
+  iframeRef?: Ref<HTMLIFrameElement>;
 }
 
 function HtmlPreview({
@@ -16,11 +17,13 @@ function HtmlPreview({
   zoom,
   viewportW,
   viewportH,
+  iframeRef,
 }: {
   asset: FileAsset;
   zoom: number;
   viewportW?: number | null;
   viewportH?: number | null;
+  iframeRef?: Ref<HTMLIFrameElement>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -60,6 +63,7 @@ function HtmlPreview({
       style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}
     >
       <iframe
+        ref={iframeRef}
         src={asset.url}
         title={asset.file?.name ?? asset.displayName ?? asset.url}
         sandbox="allow-scripts allow-same-origin"
@@ -102,7 +106,7 @@ function HtmlPreview({
   );
 }
 
-export default function FilePreview({ asset, zoom, viewportW, viewportH, imgRef }: Props) {
+export default function FilePreview({ asset, zoom, viewportW, viewportH, imgRef, iframeRef }: Props) {
   if (asset.type === "url") {
     return (
       <HtmlPreview
@@ -110,6 +114,7 @@ export default function FilePreview({ asset, zoom, viewportW, viewportH, imgRef 
         zoom={zoom}
         viewportW={viewportW}
         viewportH={viewportH}
+        iframeRef={iframeRef}
       />
     );
   }
