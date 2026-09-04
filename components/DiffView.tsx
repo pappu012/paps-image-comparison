@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import pixelmatch from "pixelmatch";
 import { LaneData } from "./ComparisonTool";
 import { analyzeDiff, type DiffAnalysis } from "@/lib/diffAnalysis";
+import BackButton from "./BackButton";
 
 interface Props {
   lanes: LaneData[];
   zoom: number;
+  onBack?: () => void;
 }
 
 interface DiffState {
@@ -59,7 +61,7 @@ function describeChange(pct: number, diffPixels: number, totalPixels: number, la
   return `${base} Major differences — the images appear substantially different in composition or content.`;
 }
 
-export default function DiffView({ lanes, zoom }: Props) {
+export default function DiffView({ lanes, zoom, onBack }: Props) {
   const imageLanes = lanes.filter((l) => l.asset?.type === "image");
 
   const [laneAId, setLaneAId] = useState(imageLanes[0]?.id ?? "");
@@ -163,6 +165,13 @@ export default function DiffView({ lanes, zoom }: Props) {
         className="flex items-center gap-4 px-4 py-2.5 shrink-0 flex-wrap"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}
       >
+        {onBack && (
+          <>
+            <BackButton onClick={onBack} />
+            <div className="w-px h-4 shrink-0" style={{ background: "var(--border)" }} />
+          </>
+        )}
+
         {/* Lane selectors */}
         <div className="flex items-center gap-2 text-sm">
           <span style={{ color: "var(--text-muted)" }}>Compare</span>
@@ -184,8 +193,12 @@ export default function DiffView({ lanes, zoom }: Props) {
         <div className="w-px h-4 shrink-0" style={{ background: "var(--border)" }} />
 
         {/* Threshold */}
-        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-          <span>Sensitivity</span>
+        <div
+          className="flex items-center gap-2 text-xs"
+          style={{ color: "var(--text-muted)" }}
+          title="How strict the comparison is. Higher sensitivity flags even tiny pixel variations (more false positives from anti-aliasing); lower sensitivity ignores minor variations and only flags clearer differences."
+        >
+          <span style={{ cursor: "help" }}>Sensitivity</span>
           <input
             type="range"
             min={0.01}
@@ -194,7 +207,6 @@ export default function DiffView({ lanes, zoom }: Props) {
             value={threshold}
             onChange={(e) => setThreshold(Number(e.target.value))}
             className="w-24"
-            title={`Threshold: ${threshold}`}
           />
           <span className="w-8">{Math.round((1 - threshold) * 100)}%</span>
         </div>
@@ -315,13 +327,18 @@ export default function DiffView({ lanes, zoom }: Props) {
                     {/* Analysis tags */}
                     {diff.analysis && diff.analysis.dominantTypes.length > 0 && (
                       <div style={{ padding: "8px 14px", display: "flex", flexWrap: "wrap", gap: 6, borderBottom: "1px solid var(--border)" }}>
-                        <span style={{ color: "var(--text-muted)", marginRight: 2, alignSelf: "center" }}>Change type:</span>
+                        <span style={{ color: "var(--text-muted)", marginRight: 2, alignSelf: "center" }}>Likely cause:</span>
                         {diff.analysis.dominantTypes.map((t) => (
-                          <span key={t} style={{
-                            fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
-                            padding: "2px 8px", borderRadius: 3,
-                            background: "rgba(91,141,239,0.12)", color: "rgba(91,141,239,1)",
-                          }}>
+                          <span
+                            key={t}
+                            title={CHANGE_TYPE_HINTS[t]}
+                            style={{
+                              fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
+                              padding: "2px 8px", borderRadius: 3,
+                              background: "rgba(91,141,239,0.12)", color: "rgba(91,141,239,1)",
+                              cursor: CHANGE_TYPE_HINTS[t] ? "help" : undefined,
+                            }}
+                          >
                             {t}
                           </span>
                         ))}
@@ -331,10 +348,26 @@ export default function DiffView({ lanes, zoom }: Props) {
                     {/* Breakdown row */}
                     {diff.analysis && (
                       <div style={{ padding: "8px 14px", display: "flex", gap: 20, flexWrap: "wrap" }}>
-                        <StatChip label="Region" value={diff.analysis.regions.join(", ")} />
-                        <StatChip label="Changed px" value={diff.analysis.redPixels.toLocaleString()} />
-                        <StatChip label="AA px" value={diff.analysis.bluePixels.toLocaleString()} />
-                        <StatChip label="AA ratio" value={`${Math.round(diff.analysis.aaRatio * 100)}%`} />
+                        <StatChip
+                          label="Where"
+                          value={diff.analysis.regions.join(", ")}
+                          hint="Which part of the image most of the differences are concentrated in"
+                        />
+                        <StatChip
+                          label="Real changes"
+                          value={diff.analysis.redPixels.toLocaleString()}
+                          hint="Pixels that meaningfully differ between the two images (shown in red)"
+                        />
+                        <StatChip
+                          label="Edge artefacts"
+                          value={diff.analysis.bluePixels.toLocaleString()}
+                          hint="Pixels flagged only due to anti-aliasing / edge smoothing (shown in blue) — usually not a real content change"
+                        />
+                        <StatChip
+                          label="% likely noise"
+                          value={`${Math.round(diff.analysis.aaRatio * 100)}%`}
+                          hint="Share of all differences that are just anti-aliasing/edge artefacts rather than real content changes — higher means the diff is less meaningful"
+                        />
                       </div>
                     )}
                   </div>
@@ -375,14 +408,25 @@ export default function DiffView({ lanes, zoom }: Props) {
   );
 }
 
-function StatChip({ label, value }: { label: string; value: string }) {
+function StatChip({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={{ fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--border)" }}>{label}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 1 }} title={hint}>
+      <span style={{ fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--border)", cursor: hint ? "help" : undefined }}>
+        {label}
+      </span>
       <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "ui-monospace, 'SF Mono', monospace" }}>{value}</span>
     </div>
   );
 }
+
+const CHANGE_TYPE_HINTS: Record<string, string> = {
+  "font / text rendering": "Differences look like text or font anti-aliasing — often just how characters were rendered, not a real content change.",
+  "layout / spacing shift": "A whole row of the image shifted — elements were likely moved, resized, or spaced differently.",
+  "element repositioning": "A whole column of the image shifted — something was likely moved horizontally.",
+  "image / object change": "A tightly-packed cluster of pixels changed — likely a specific image, icon, or object was swapped or edited.",
+  "colour / tone shift": "Differences are spread broadly across the image — likely a colour, brightness, or theme change rather than a layout change.",
+  "mixed changes": "Differences don't fit one clear pattern — likely a combination of several kinds of changes.",
+};
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (

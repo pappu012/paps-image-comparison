@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Lane from "./Lane";
 import SliderComparison from "./SliderComparison";
 import DiffView from "./DiffView";
@@ -195,6 +195,14 @@ export default function ComparisonTool() {
   const [stickyGuides, setStickyGuides] = useState<StickyGuide[]>([]);
   const [showMagnifier, setShowMagnifier] = useState(false);
   const [magnifierZoom, setMagnifierZoom] = useState(3);
+
+  const lastMainModeRef = useRef<ViewMode>("side-by-side");
+  useEffect(() => {
+    if (viewMode === "side-by-side" || viewMode === "stacked" || viewMode === "grid") {
+      lastMainModeRef.current = viewMode;
+    }
+  }, [viewMode]);
+  const goBack = useCallback(() => setViewMode(lastMainModeRef.current), []);
 
   const adjustMagnifierZoom = useCallback((delta: number) => {
     setMagnifierZoom((z) => Math.min(8, Math.max(1.5, z + delta)));
@@ -400,7 +408,8 @@ export default function ComparisonTool() {
 
   const filledLanes = lanes.filter((l) => l.asset !== null);
   const imageLanes = lanes.filter((l) => l.asset?.type === "image");
-  const canSlider = imageLanes.length >= 2;
+  const sliderableLanes = lanes.filter((l) => l.asset && l.asset.type !== "unknown");
+  const canSlider = sliderableLanes.length >= 2;
   const canDiff = imageLanes.length >= 2;
 
   return (
@@ -494,11 +503,11 @@ export default function ComparisonTool() {
             >
               {(
                 [
-                  { mode: "slider", label: "Slider", disabled: !canSlider, hint: "Requires 2+ images" },
-                  { mode: "diff", label: "Diff", disabled: !canDiff, hint: "Requires 2+ images" },
-                  { mode: "check", label: "Render Check", disabled: false, hint: undefined },
-                ] as { mode: ViewMode; label: string; disabled: boolean; hint?: string }[]
-              ).map(({ mode, label, disabled, hint }) => (
+                  { mode: "slider", label: "Slider", disabled: !canSlider, hint: "Requires 2+ assets", desc: "Drag a divider to compare any two loaded assets — images, video, PDF, HTML, or web pages" },
+                  { mode: "diff", label: "Diff", disabled: !canDiff, hint: "Requires 2+ images", desc: "Highlight the pixel differences between two images" },
+                  { mode: "check", label: "Render Check", disabled: false, hint: undefined, desc: "Preview how the asset renders in different contexts" },
+                ] as { mode: ViewMode; label: string; disabled: boolean; hint?: string; desc: string }[]
+              ).map(({ mode, label, disabled, hint, desc }) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
@@ -508,7 +517,7 @@ export default function ComparisonTool() {
                     background: viewMode === mode ? (mode === "diff" ? "#7c3aed" : "var(--accent)") : "transparent",
                     color: viewMode === mode ? (mode === "diff" ? "#fff" : "var(--accent-text)") : "var(--text-muted)",
                   }}
-                  title={disabled ? hint : undefined}
+                  title={disabled ? hint : desc}
                 >
                   {label}
                 </button>
@@ -554,10 +563,10 @@ export default function ComparisonTool() {
                   background: showMagnifier ? "var(--accent)" : "transparent",
                   color: showMagnifier ? "var(--accent-text)" : "var(--text-muted)",
                 }}
-                title={showMagnifier ? `Hide loupe (scroll to adjust ${magnifierZoom.toFixed(1)}x)` : "Show loupe — hover an image to zoom into that spot"}
+                title={showMagnifier ? `Hide magnify (scroll to adjust ${magnifierZoom.toFixed(1)}x)` : "Show magnify — hover an image to zoom into that spot"}
               >
                 <IconMagnifier />
-                Loupe
+                Magnify
               </button>
             </div>
 
@@ -568,6 +577,7 @@ export default function ComparisonTool() {
             >
               <button
                 onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
+                title="Zoom out"
                 className="hover-text w-5 text-center"
               >
                 −
@@ -610,12 +620,14 @@ export default function ComparisonTool() {
               )}
               <button
                 onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
+                title="Zoom in"
                 className="hover-text w-5 text-center"
               >
                 +
               </button>
               <button
                 onClick={() => setZoom(1)}
+                title="Reset zoom to 100%"
                 className="hover-text ml-1 pl-1"
                 style={{ borderLeft: "1px solid var(--border)" }}
               >
@@ -668,13 +680,13 @@ export default function ComparisonTool() {
         {/* Main content */}
         <main className="flex-1 overflow-hidden">
           {viewMode === "check" ? (
-          <VisualCheck lanes={lanes} />
+          <VisualCheck lanes={lanes} onBack={goBack} />
         ) : viewMode === "diff" ? (
-          <DiffView lanes={lanes} zoom={zoom} />
+          <DiffView lanes={lanes} zoom={zoom} onBack={goBack} />
         ) : viewMode === "slider" && canSlider ? (
           <SliderComparison
-            laneA={imageLanes[0]}
-            laneB={imageLanes[1]}
+            laneA={sliderableLanes[0]}
+            laneB={sliderableLanes[1]}
             zoom={zoom}
             showGuides={showGuides}
             guideOpacity={guideOpacity}
@@ -683,53 +695,12 @@ export default function ComparisonTool() {
             showMagnifier={showMagnifier}
             magnifierZoom={magnifierZoom}
             onMagnifierZoomChange={adjustMagnifierZoom}
+            onBack={goBack}
           />
-        ) : viewMode === "grid" ? (
-          <div
-            className="p-4 h-full overflow-auto scrollbar-thin"
-            style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(lanes.length, 2)}, 1fr)`, gap: 16, minHeight: "100%" }}
-          >
-            {lanes.map((lane, idx) => (
-              <Lane
-                key={lane.id}
-                lane={lane}
-                zoom={zoom}
-                viewMode="grid"
-                canRemove={lanes.length > 1}
-                canMoveLeft={idx > 0}
-                canMoveRight={idx < lanes.length - 1}
-                showGuides={showGuides}
-                guideOpacity={guideOpacity}
-                cursorPos={cursorPos}
-                stickyGuides={stickyGuides}
-                onCursorMove={setCursorPos}
-                showMagnifier={showMagnifier}
-                magnifierZoom={magnifierZoom}
-                onMagnifierZoomChange={adjustMagnifierZoom}
-                onAddStickyGuide={addStickyGuide}
-                onRemoveStickyGuide={removeStickyGuide}
-                onUpdateStickyGuide={updateStickyGuideColor}
-                onSetAsset={(file) => setAsset(lane.id, file)}
-                onSetHtmlFolder={(entries) => setHtmlFolder(lane.id, entries)}
-                onSetUrl={(url) => setUrl(lane.id, url)}
-                onClear={() => clearAsset(lane.id)}
-                onRemove={() => removeLane(lane.id)}
-                onLabelChange={(label) => updateLabel(lane.id, label)}
-                onMoveLeft={() => moveLane(lane.id, "left")}
-                onMoveRight={() => moveLane(lane.id, "right")}
-                onReorder={(fromId) => reorderLanes(fromId, lane.id)}
-                refreshSignal={refreshSignal}
-                viewportSync={viewportSync}
-                onApplyViewportToAll={applyViewportToAll}
-                sizePanelSync={sizePanelSync}
-                onSetSizePanelAll={setSizePanelForAll}
-              />
-            ))}
-          </div>
         ) : (
           <div
-            className={`flex gap-4 p-4 h-full overflow-auto scrollbar-thin ${viewMode === "stacked" ? "flex-col" : "flex-row"}`}
-            style={{ minHeight: "100%" }}
+            className={viewMode === "grid" ? "p-4 h-full overflow-auto scrollbar-thin" : `flex gap-4 p-4 h-full overflow-auto scrollbar-thin ${viewMode === "stacked" ? "flex-col" : "flex-row"}`}
+            style={viewMode === "grid" ? { display: "grid", gridTemplateColumns: `repeat(${Math.min(lanes.length, 2)}, 1fr)`, gap: 16, minHeight: "100%" } : { minHeight: "100%" }}
           >
             {lanes.map((lane, idx) => (
               <Lane

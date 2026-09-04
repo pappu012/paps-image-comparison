@@ -105,6 +105,7 @@ export default function Lane({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const overlayInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -127,17 +128,12 @@ export default function Lane({
   const [customActive, setCustomActive] = useState(false);
   const [showViewportPanel, setShowViewportPanel] = useState(false);
   const [sizeButtonPulseKey, setSizeButtonPulseKey] = useState(0);
-  const [inspectMode, setInspectMode] = useState(false);
-  const [inspectPinned, setInspectPinned] = useState(false);
-  const [inspectBlocked, setInspectBlocked] = useState(false);
-  const [hoverBox, setHoverBox] = useState<{
-    margin: { left: number; top: number; width: number; height: number };
-    border: { left: number; top: number; width: number; height: number };
-    padding: { left: number; top: number; width: number; height: number };
-    content: { left: number; top: number; width: number; height: number };
-    label: string;
-    dims: string;
-  } | null>(null);
+  const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
+  const [overlayName, setOverlayName] = useState("");
+  const [overlayOpacity, setOverlayOpacity] = useState(50);
+  const [overlayInvert, setOverlayInvert] = useState(false);
+  const [overlayDifference, setOverlayDifference] = useState(false);
+  const [showOverlayPanel, setShowOverlayPanel] = useState(false);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -190,13 +186,6 @@ export default function Lane({
       folderInputRef.current.setAttribute("webkitdirectory", "");
     }
   }, []);
-
-  // Reset inspector state whenever the asset changes or inspect mode is turned off
-  useEffect(() => {
-    setInspectPinned(false);
-    setInspectBlocked(false);
-    setHoverBox(null);
-  }, [lane.asset?.id, inspectMode]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -309,95 +298,6 @@ export default function Lane({
     };
   };
 
-  // Locate the DOM element under the cursor inside the iframe. Returns "blocked" when the
-  // iframe is cross-origin — the browser refuses any read of its document from here.
-  const pickElementAt = (clientX: number, clientY: number) => {
-    const iframeEl = iframeRef.current;
-    if (!iframeEl) return null;
-    let doc: Document | null;
-    try {
-      doc = iframeEl.contentDocument;
-    } catch {
-      return "blocked" as const;
-    }
-    if (!doc) return "blocked" as const;
-    const iframeRect = iframeEl.getBoundingClientRect();
-    const offsetW = iframeEl.offsetWidth || 1;
-    const offsetH = iframeEl.offsetHeight || 1;
-    if (iframeRect.width === 0 || iframeRect.height === 0) return null;
-    const scaleX = iframeRect.width / offsetW;
-    const scaleY = iframeRect.height / offsetH;
-    const localX = (clientX - iframeRect.left) / scaleX;
-    const localY = (clientY - iframeRect.top) / scaleY;
-    if (localX < 0 || localY < 0 || localX > offsetW || localY > offsetH) return null;
-    let el: Element | null;
-    try {
-      el = doc.elementFromPoint(localX, localY);
-    } catch {
-      return "blocked" as const;
-    }
-    if (!el || el === doc.documentElement || el === doc.body) return null;
-    return { el, iframeRect, scaleX, scaleY };
-  };
-
-  // Build the box-model overlay (margin/border/padding/content rings) for an element,
-  // in coordinates relative to the lane's content area — mirrors the DevTools inspector.
-  const buildHighlight = (el: Element, iframeRect: DOMRect, scaleX: number, scaleY: number) => {
-    const win = el.ownerDocument.defaultView;
-    const contRect = contentAreaRef.current?.getBoundingClientRect();
-    if (!win || !contRect) return null;
-    const cs = win.getComputedStyle(el);
-    const rect = el.getBoundingClientRect(); // border box, iframe-local coords
-    const num = (v: string) => parseFloat(v) || 0;
-    const mt = num(cs.marginTop), mr = num(cs.marginRight), mb = num(cs.marginBottom), ml = num(cs.marginLeft);
-    const bt = num(cs.borderTopWidth), br = num(cs.borderRightWidth), bb = num(cs.borderBottomWidth), bl = num(cs.borderLeftWidth);
-    const pt = num(cs.paddingTop), pr = num(cs.paddingRight), pb = num(cs.paddingBottom), pl = num(cs.paddingLeft);
-
-    const box = (l: number, t: number, w: number, h: number) => ({
-      left: iframeRect.left + l * scaleX - contRect.left,
-      top: iframeRect.top + t * scaleY - contRect.top,
-      width: Math.max(0, w) * scaleX,
-      height: Math.max(0, h) * scaleY,
-    });
-
-    const classes = el.classList.length ? "." + Array.from(el.classList).join(".") : "";
-    const idStr = el.id ? `#${el.id}` : "";
-
-    return {
-      margin: box(rect.left - ml, rect.top - mt, rect.width + ml + mr, rect.height + mt + mb),
-      border: box(rect.left, rect.top, rect.width, rect.height),
-      padding: box(rect.left + bl, rect.top + bt, rect.width - bl - br, rect.height - bt - bb),
-      content: box(rect.left + bl + pl, rect.top + bt + pt, rect.width - bl - br - pl - pr, rect.height - bt - bb - pt - pb),
-      label: `${el.tagName.toLowerCase()}${idStr}${classes}`,
-      dims: `${Math.round(rect.width)} × ${Math.round(rect.height)}`,
-    };
-  };
-
-  const handleInspectMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (inspectPinned) return;
-    const picked = pickElementAt(e.clientX, e.clientY);
-    if (picked === "blocked") {
-      setInspectBlocked(true);
-      setHoverBox(null);
-      return;
-    }
-    if (!picked) {
-      setHoverBox(null);
-      return;
-    }
-    const built = buildHighlight(picked.el, picked.iframeRect, picked.scaleX, picked.scaleY);
-    setHoverBox(built);
-  };
-
-  const handleInspectMouseLeave = () => {
-    if (!inspectPinned) setHoverBox(null);
-  };
-
-  const handleInspectClick = () => {
-    if (!hoverBox && !inspectPinned) return;
-    setInspectPinned((p) => !p);
-  };
-
   const submitUrl = () => {
     const trimmed = urlDraft.trim();
     if (!trimmed) return;
@@ -415,6 +315,31 @@ export default function Lane({
     if (labelDraft.trim()) onLabelChange(labelDraft.trim());
     else setLabelDraft(lane.label);
   };
+
+  const handleOverlayFile = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setOverlayUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setOverlayName(file.name);
+  };
+
+  const removeOverlay = () => {
+    setOverlayUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setOverlayName("");
+  };
+
+  useEffect(() => {
+    return () => {
+      if (overlayUrl) URL.revokeObjectURL(overlayUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const ext = lane.asset?.ext ?? "";
   const extColor = TYPE_COLORS[ext] ?? "#888";
@@ -656,15 +581,15 @@ export default function Lane({
               {lane.label}
               <svg
                 viewBox="0 0 12 12"
-                width="11"
-                height="11"
+                width="13"
+                height="13"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.3"
+                strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="shrink-0 transition-opacity"
-                style={{ opacity: 0.35, color: "var(--text-muted)" }}
+                className="shrink-0 transition-opacity opacity-70 group-hover:opacity-100"
+                style={{ color: "var(--accent)" }}
               >
                 <path d="M8.5 1.5 10.5 3.5 4 10H2v-2z" />
               </svg>
@@ -713,23 +638,29 @@ export default function Lane({
                   ↑ Replace
                 </button>
               )}
-              {lane.asset.type === "url" && (
-                <button
-                  onClick={() => setInspectMode((v) => !v)}
-                  className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
-                  style={{ color: inspectMode ? "var(--accent)" : "var(--text-muted)" }}
-                  title={inspectMode ? "Stop inspecting elements" : "Inspect elements — hover to highlight, click to pin"}
-                >
-                  {"</> Inspect"}
-                </button>
-              )}
               <button
                 onClick={() => setRefreshKey((k) => k + 1)}
-                className="text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                 style={{ color: "var(--text-muted)" }}
                 title="Reload"
               >
-                ↻ Reload
+                <svg viewBox="0 0 20 20" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 10a6 6 0 0 1 10.2-4.2M16 10a6 6 0 0 1-10.2 4.2" />
+                  <path d="M14 2.5V6h-3.5M6 17.5V14h3.5" />
+                </svg>
+                Reload
+              </button>
+              <button
+                onClick={() => setShowOverlayPanel((v) => !v)}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
+                style={{ color: showOverlayPanel || overlayUrl ? "var(--accent)" : "var(--text-muted)" }}
+                title={showOverlayPanel ? "Hide overlay panel" : "Overlay a reference image on top of this lane to check pixel alignment"}
+              >
+                <svg viewBox="0 0 20 20" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="11" height="11" rx="1.5" />
+                  <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+                </svg>
+                Overlay
               </button>
               {(lane.asset.type === "html" || lane.asset.type === "url") && (
                 <button
@@ -794,6 +725,101 @@ export default function Lane({
         </div>
       </div>
 
+      {/* Overlay toolbar */}
+      {showOverlayPanel && (
+        <div
+          className="flex items-center gap-2 px-2 shrink-0 overflow-x-auto"
+          style={{
+            borderBottom: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            height: 30,
+            minHeight: 30,
+          }}
+        >
+          {!overlayUrl ? (
+            <button
+              onClick={() => overlayInputRef.current?.click()}
+              className="shrink-0 rounded transition-colors hover:bg-white/5"
+              style={{ fontSize: 11, padding: "1px 7px", color: "var(--accent)", whiteSpace: "nowrap" }}
+            >
+              + Upload overlay image
+            </button>
+          ) : (
+            <>
+              <span
+                className="shrink-0 truncate"
+                style={{ fontSize: 11, color: "var(--text-muted)", maxWidth: 100 }}
+                title={overlayName}
+              >
+                {overlayName}
+              </span>
+              <button
+                onClick={() => overlayInputRef.current?.click()}
+                className="shrink-0 rounded transition-colors hover:bg-white/5"
+                style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)", whiteSpace: "nowrap" }}
+              >
+                ↑ Replace
+              </button>
+
+              <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Opacity</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={overlayOpacity}
+                onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+                className="w-20 accent-current shrink-0"
+                style={{ color: "var(--accent)" }}
+              />
+              <span style={{ fontSize: 11, color: "var(--text-muted)", width: 30, flexShrink: 0 }}>
+                {overlayOpacity}%
+              </span>
+
+              <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+
+              <button
+                onClick={() => setOverlayInvert((v) => !v)}
+                className="shrink-0 rounded transition-colors"
+                style={{
+                  fontSize: 11, padding: "1px 7px", whiteSpace: "nowrap",
+                  background: overlayInvert ? "var(--accent)" : "transparent",
+                  color: overlayInvert ? "#fff" : "var(--text-muted)",
+                }}
+                title="Invert the overlay's colours — useful when comparing a light design against a dark render, or vice versa"
+              >
+                Invert
+              </button>
+
+              <button
+                onClick={() => setOverlayDifference((v) => !v)}
+                className="shrink-0 rounded transition-colors"
+                style={{
+                  fontSize: 11, padding: "1px 7px", whiteSpace: "nowrap",
+                  background: overlayDifference ? "var(--accent)" : "transparent",
+                  color: overlayDifference ? "#fff" : "var(--text-muted)",
+                }}
+                title="Difference blend — mismatched pixels light up, perfectly aligned areas turn black"
+              >
+                Difference
+              </button>
+
+              <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+
+              <button
+                onClick={removeOverlay}
+                className="shrink-0 rounded transition-colors hover:bg-white/5"
+                style={{ fontSize: 11, padding: "1px 7px", color: "#e5877a", whiteSpace: "nowrap" }}
+                title="Remove overlay"
+              >
+                ✕ Remove
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* URL input bar */}
       {showUrlInput && (
         <div
@@ -845,15 +871,41 @@ export default function Lane({
         {/* Scrollable content area */}
         <div className="absolute inset-0 overflow-auto scrollbar-thin">
           {lane.asset ? (
-            <FilePreview
-              key={refreshKey}
-              asset={lane.asset}
-              zoom={zoom}
-              viewportW={viewportW}
-              viewportH={viewportH}
-              imgRef={imgRef}
-              iframeRef={iframeRef}
-            />
+            <div className="relative w-full h-full">
+              <FilePreview
+                key={refreshKey}
+                asset={lane.asset}
+                zoom={zoom}
+                viewportW={viewportW}
+                viewportH={viewportH}
+                imgRef={imgRef}
+                iframeRef={iframeRef}
+              />
+              {overlayUrl && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  style={{
+                    opacity: overlayOpacity / 100,
+                    mixBlendMode: overlayDifference ? "difference" : "normal",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={overlayUrl}
+                    alt="Overlay reference"
+                    style={{
+                      maxWidth: `${zoom * 100}%`,
+                      maxHeight: `${zoom * 100}%`,
+                      width: "auto",
+                      height: "auto",
+                      objectFit: "contain",
+                      display: "block",
+                      filter: overlayInvert ? "invert(1)" : undefined,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           ) : (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 cursor-pointer select-none"
@@ -936,74 +988,6 @@ export default function Lane({
               );
             }}
           />
-        )}
-
-        {/* Element inspector overlay — hover to highlight, click to pin (url assets only) */}
-        {inspectMode && (
-          <div
-            className="absolute inset-0"
-            style={{ zIndex: 12, cursor: "crosshair" }}
-            onMouseMove={handleInspectMouseMove}
-            onMouseLeave={handleInspectMouseLeave}
-            onClick={handleInspectClick}
-          />
-        )}
-
-        {inspectMode && inspectBlocked && !hoverBox && (
-          <div
-            className="absolute inset-0 pointer-events-none flex items-start justify-center"
-            style={{ zIndex: 13, paddingTop: 12 }}
-          >
-            <div
-              style={{
-                background: "rgba(0,0,0,0.75)",
-                color: "#f2b8a8",
-                fontSize: 11,
-                padding: "4px 10px",
-                borderRadius: 6,
-              }}
-            >
-              Can&apos;t inspect — this page is cross-origin, so the browser blocks reading its DOM
-            </div>
-          </div>
-        )}
-
-        {inspectMode && hoverBox && (
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 13 }}>
-            <div style={{ position: "absolute", left: hoverBox.margin.left, top: hoverBox.margin.top, width: hoverBox.margin.width, height: hoverBox.margin.height, background: "rgba(246, 178, 107, 0.45)" }} />
-            <div style={{ position: "absolute", left: hoverBox.border.left, top: hoverBox.border.top, width: hoverBox.border.width, height: hoverBox.border.height, background: "rgba(255, 229, 143, 0.45)" }} />
-            <div style={{ position: "absolute", left: hoverBox.padding.left, top: hoverBox.padding.top, width: hoverBox.padding.width, height: hoverBox.padding.height, background: "rgba(147, 196, 125, 0.45)" }} />
-            <div
-              style={{
-                position: "absolute",
-                left: hoverBox.content.left,
-                top: hoverBox.content.top,
-                width: hoverBox.content.width,
-                height: hoverBox.content.height,
-                background: "rgba(111, 168, 220, 0.55)",
-                boxShadow: "0 0 0 1px rgba(111, 168, 220, 0.9)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                left: Math.max(0, hoverBox.border.left),
-                top: Math.max(0, hoverBox.border.top - 22),
-                background: inspectPinned ? "rgba(91,141,239,0.95)" : "rgba(0,0,0,0.8)",
-                color: "#fff",
-                fontSize: 10,
-                fontFamily: "monospace",
-                padding: "2px 6px",
-                borderRadius: 4,
-                whiteSpace: "nowrap",
-                maxWidth: 260,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {inspectPinned ? "📌 " : ""}{hoverBox.label} · {hoverBox.dims}
-            </div>
-          </div>
         )}
 
         {/* Cursor crosshair (ephemeral) */}
@@ -1231,6 +1215,14 @@ export default function Lane({
         type="file"
         className="hidden"
         onChange={handleFolderInput}
+      />
+      <input
+        ref={overlayInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleOverlayFile(e.target.files)}
+        onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
       />
     </div>
   );

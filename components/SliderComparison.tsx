@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, useEffect, MouseEvent, TouchEvent } from "react";
-import { LaneData, CursorPos } from "./ComparisonTool";
+import { useRef, useState, useEffect, MouseEvent, TouchEvent, RefObject } from "react";
+import { FileAsset, LaneData, CursorPos } from "./ComparisonTool";
+import BackButton from "./BackButton";
 
 interface Props {
   laneA: LaneData;
@@ -14,6 +15,7 @@ interface Props {
   showMagnifier?: boolean;
   magnifierZoom?: number;
   onMagnifierZoomChange?: (delta: number) => void;
+  onBack?: () => void;
 }
 
 const MAGNIFIER_SIZE = 180;
@@ -29,6 +31,7 @@ export default function SliderComparison({
   showMagnifier,
   magnifierZoom = 3,
   onMagnifierZoomChange,
+  onBack,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgARef = useRef<HTMLImageElement>(null);
@@ -52,6 +55,8 @@ export default function SliderComparison({
     if (imgRect.width === 0 || imgRect.height === 0) return null;
     const imgLeft = imgRect.left - contRect.left;
     const imgTop = imgRect.top - contRect.top;
+
+    if (activeAsset.type !== "image") return null;
 
     const ix = (cursorPxX - imgLeft) / imgRect.width;
     const iy = (cursorPxY - imgTop) / imgRect.height;
@@ -109,33 +114,90 @@ export default function SliderComparison({
   };
 
   const imgStyle = {
-    width: `${zoom * 100}%`,
+    maxWidth: `${zoom * 100}%`,
+    maxHeight: `${zoom * 100}%`,
+    width: "auto",
     height: "auto",
-    maxWidth: "none",
     objectFit: "contain" as const,
     display: "block",
     userSelect: "none" as const,
+  };
+
+  const renderPane = (asset: FileAsset, label: string, ref?: RefObject<HTMLImageElement | null>) => {
+    if (asset.type === "video") {
+      return (
+        <video
+          src={asset.url}
+          controls
+          style={{
+            maxWidth: `${zoom * 100}%`,
+            maxHeight: `${zoom * 100}%`,
+            width: "auto",
+            height: "auto",
+            display: "block",
+          }}
+        />
+      );
+    }
+
+    if (asset.type === "pdf") {
+      return (
+        <iframe
+          src={asset.url}
+          title={label}
+          style={{ width: "100%", height: "100%", border: "none" }}
+        />
+      );
+    }
+
+    if (asset.type === "html" || asset.type === "url") {
+      return (
+        <iframe
+          src={asset.url}
+          title={label}
+          sandbox="allow-scripts allow-same-origin"
+          style={{
+            border: "none",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: `${(1 / zoom) * 100}%`,
+            height: `${(1 / zoom) * 100}%`,
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+          }}
+        />
+      );
+    }
+
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img ref={ref} src={asset.url} alt={label} style={imgStyle} draggable={false} />
+    );
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Labels */}
       <div
-        className="flex justify-between px-4 py-2 text-xs font-medium shrink-0"
+        className="flex items-center gap-3 px-4 py-2 text-xs font-medium shrink-0"
         style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
       >
-        <span
-          className="px-2 py-1 rounded"
-          style={{ background: "var(--surface-2)" }}
-        >
-          ← {laneA.label}
-        </span>
-        <span
-          className="px-2 py-1 rounded"
-          style={{ background: "var(--surface-2)" }}
-        >
-          {laneB.label} →
-        </span>
+        {onBack && <BackButton onClick={onBack} />}
+        <div className="flex-1 flex justify-between">
+          <span
+            className="px-2 py-1 rounded"
+            style={{ background: "var(--surface-2)" }}
+          >
+            ← {laneA.label}
+          </span>
+          <span
+            className="px-2 py-1 rounded"
+            style={{ background: "var(--surface-2)" }}
+          >
+            {laneB.label} →
+          </span>
+        </div>
       </div>
 
       {/* Slider container */}
@@ -154,19 +216,17 @@ export default function SliderComparison({
         }}
         onMouseLeave={() => { if (showGuides || showMagnifier) onCursorMove?.(null); }}
       >
-        {/* Image B (right, full width) */}
+        {/* Asset B (right, full width) */}
         <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={imgBRef} src={laneB.asset!.url} alt={laneB.label} style={imgStyle} draggable={false} />
+          {renderPane(laneB.asset!, laneB.label, imgBRef)}
         </div>
 
-        {/* Image A (left, clipped) */}
+        {/* Asset A (left, clipped) */}
         <div
           className="absolute inset-0 overflow-hidden flex items-center justify-center"
           style={{ clipPath: `inset(0 ${100 - splitPct}% 0 0)` }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img ref={imgARef} src={laneA.asset!.url} alt={laneA.label} style={imgStyle} draggable={false} />
+          {renderPane(laneA.asset!, laneA.label, imgARef)}
         </div>
 
         {/* Divider line */}

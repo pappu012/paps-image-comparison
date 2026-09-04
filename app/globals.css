@@ -37,6 +37,21 @@
   box-sizing: border-box;
 }
 
+button:not(:disabled),
+a,
+[role="button"],
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+select {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 body {
   background:
     radial-gradient(circle at 12% 15%, rgba(111, 156, 224, 0.22), transparent 50%),

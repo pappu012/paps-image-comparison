@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import pixelmatch from "pixelmatch";
 import { LaneData } from "./ComparisonTool";
 import { analyzeDiff, type DiffAnalysis } from "@/lib/diffAnalysis";
+import BackButton from "./BackButton";
 
 // ─── Types & utilities ────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ function Thumb({
 }) {
   return (
     <div style={{
-      flex: 1, overflow: "hidden", background: "var(--surface-2)",
+      flex: 1, overflow: "hidden", 
       display: "flex", alignItems: "center", justifyContent: "center",
       position: "relative", minHeight: 0,
     }}>
@@ -170,9 +171,10 @@ function Thumb({
 
 interface Props {
   lanes: LaneData[];
+  onBack?: () => void;
 }
 
-export default function VisualCheck({ lanes }: Props) {
+export default function VisualCheck({ lanes, onBack }: Props) {
   const [imgStatus, setImgStatus] = useState<Record<string, "ok" | "error">>({});
   const [pairs, setPairs] = useState<PairResult[]>([]);
 
@@ -222,8 +224,14 @@ export default function VisualCheck({ lanes }: Props) {
   const summaryColor = allOk ? "#4ade80" : filled.length === 0 ? "var(--text-muted)" : "#fbbf24";
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden", background: "var(--bg)" }}>
+    <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden",}}>
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "40px 32px 56px" }}>
+
+        {onBack && (
+          <div style={{ marginBottom: 24 }}>
+            <BackButton onClick={onBack} />
+          </div>
+        )}
 
         {/* ── Hero ─────────────────────────────────────────────────────── */}
         <div style={{
