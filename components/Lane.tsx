@@ -546,11 +546,18 @@ export default function Lane({
               e.dataTransfer.setData("lane-reorder", lane.id);
               e.dataTransfer.effectAllowed = "move";
             }}
-            className="cursor-grab active:cursor-grabbing flex items-center shrink-0 select-none hover-text"
-            style={{ color: "var(--text-muted)", fontSize: 16, lineHeight: 1, marginRight: -2 }}
+            className="cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 select-none rounded transition-colors text-(--text-muted) hover:text-(--accent) hover:bg-(--surface-2)"
+            style={{ width: 16, height: 22, marginRight: -2 }}
             title="Drag to reorder lane"
           >
-            ⠿
+            <svg viewBox="0 0 8 16" width="9" height="16" fill="currentColor">
+              <circle cx="2" cy="2.5" r="1.4" />
+              <circle cx="6" cy="2.5" r="1.4" />
+              <circle cx="2" cy="8" r="1.4" />
+              <circle cx="6" cy="8" r="1.4" />
+              <circle cx="2" cy="13.5" r="1.4" />
+              <circle cx="6" cy="13.5" r="1.4" />
+            </svg>
           </div>
           {editingLabel ? (
             <input

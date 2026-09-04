@@ -415,7 +415,7 @@ export default function ComparisonTool() {
   return (
     <div className="h-screen w-full flex items-stretch justify-center p-[0.05rem] sm:p-[0.3em] gap-[0.2em] ">
       {/* Icon rail */}
-      <aside className="flex flex-col items-center justify-between py-4 rounded-3xl glass-panel w-17 sm:w-19 shrink-0">
+      <aside className="flex flex-col items-center justify-between py-4 rounded-3xl glass-panel w-16 shrink-0">
         <div className="flex flex-col items-center gap-2.5 w-full px-1">
           <RailIcon active={viewMode === "side-by-side"} title="Side by side" label="Split" onClick={() => setViewMode("side-by-side")}>
             <IconHouse />
@@ -454,7 +454,7 @@ export default function ComparisonTool() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowInfoPopup(false)} />
               <div
-                className="absolute left-full bottom-0 ml-2 z-50 w-64 rounded-2xl p-4 flex flex-col gap-3 glass-panel"
+                className="absolute left-full bottom-0 ml-2 z-50 w-64 rounded-3xl p-2 flex flex-col gap-3 glass-panel"
                 style={{ border: "1px solid var(--border)" }}
               >
                 <div>
@@ -483,11 +483,11 @@ export default function ComparisonTool() {
       <div className="flex flex-col flex-1 min-w-0 rounded-3xl glass-panel overflow-hidden">
         {/* Header */}
         <header
-          className="flex items-center justify-between gap-2 px-2 sm:px-5 py-3 shrink-0 flex-wrap"
+          className="flex items-center justify-between gap-2 px-1 sm:px-5 py-1 shrink-0 flex-wrap"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>
+            <h1 className="text-[20px] font-semibold tracking-tight" style={{ color: "var(--text)" }}>
               Asset Comparison
             </h1>
             <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
@@ -699,7 +699,7 @@ export default function ComparisonTool() {
           />
         ) : (
           <div
-            className={viewMode === "grid" ? "p-4 h-full overflow-auto scrollbar-thin" : `flex gap-4 p-4 h-full overflow-auto scrollbar-thin ${viewMode === "stacked" ? "flex-col" : "flex-row"}`}
+            className={viewMode === "grid" ? "p-2 h-full overflow-auto scrollbar-thin" : `flex gap-4 p-2 h-full overflow-auto scrollbar-thin ${viewMode === "stacked" ? "flex-col" : "flex-row"}`}
             style={viewMode === "grid" ? { display: "grid", gridTemplateColumns: `repeat(${Math.min(lanes.length, 2)}, 1fr)`, gap: 16, minHeight: "100%" } : { minHeight: "100%" }}
           >
             {lanes.map((lane, idx) => (
