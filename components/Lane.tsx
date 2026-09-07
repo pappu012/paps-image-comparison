@@ -984,9 +984,17 @@ export default function Lane({
         {showGuides && (
           <div
             className="absolute inset-0"
-            style={{ zIndex: 10, cursor: "crosshair" }}
+            style={{
+              zIndex: 10,
+              cursor: dragging ? undefined : "crosshair",
+              background: dragging ? "var(--accent)22" : undefined,
+              border: dragging ? "2px dashed var(--accent)" : undefined,
+            }}
             onMouseMove={handleContentMouseMove}
             onMouseLeave={handleContentMouseLeave}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               onAddStickyGuide?.(
