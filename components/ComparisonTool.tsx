@@ -263,6 +263,19 @@ export default function ComparisonTool() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasAssets]);
 
+  // Safety net: without this, a drag that misses every lane's dropzone
+  // (header, gaps, background) falls through to the browser's default
+  // behavior of navigating to the dropped file/image link.
+  useEffect(() => {
+    const preventDefaultDrag = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", preventDefaultDrag);
+    window.addEventListener("drop", preventDefaultDrag);
+    return () => {
+      window.removeEventListener("dragover", preventDefaultDrag);
+      window.removeEventListener("drop", preventDefaultDrag);
+    };
+  }, []);
+
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);

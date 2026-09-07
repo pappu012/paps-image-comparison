@@ -232,7 +232,29 @@ export default function Lane({
     }
 
     // Regular file drop
-    handleFiles(e.dataTransfer.files);
+    if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+      return;
+    }
+
+    // Dragging an <img> from a webpage carries a URL, not a File — fall
+    // back to the same "paste URL" path used by the URL input.
+    const uriList = e.dataTransfer.getData("text/uri-list");
+    const html = e.dataTransfer.getData("text/html");
+    const plain = e.dataTransfer.getData("text/plain");
+    let url = uriList
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith("#"));
+    if (!url && html) {
+      url = html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+    }
+    if (!url && (plain.startsWith("http://") || plain.startsWith("https://"))) {
+      url = plain.trim();
+    }
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      onSetUrl(url);
+    }
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
