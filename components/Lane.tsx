@@ -22,6 +22,14 @@ const VIEWPORT_PRESETS: { label: string; w: number | null; h: number | null }[] 
   { label: "Auto", w: null, h: null },
 ];
 
+const MM_TO_PX = 96 / 25.4;
+
+function convertSize(value: number, from: "px" | "mm", to: "px" | "mm"): number {
+  if (from === to) return value;
+  const px = from === "mm" ? value * MM_TO_PX : value;
+  return to === "mm" ? px / MM_TO_PX : px;
+}
+
 const TYPE_COLORS: Record<string, string> = {
   JPG: "#e8965a",
   JPEG: "#e8965a",
@@ -125,11 +133,13 @@ export default function Lane({
   const [viewportH, setViewportH] = useState<number | null>(null);
   const [customW, setCustomW] = useState("1280");
   const [customH, setCustomH] = useState("800");
+  const [customUnit, setCustomUnit] = useState<"px" | "mm">("px");
   const [customActive, setCustomActive] = useState(false);
   const [showViewportPanel, setShowViewportPanel] = useState(false);
   const [sizeButtonPulseKey, setSizeButtonPulseKey] = useState(0);
   const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
   const [overlayName, setOverlayName] = useState("");
+  const [overlayIsPdf, setOverlayIsPdf] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(50);
   const [overlayInvert, setOverlayInvert] = useState(false);
   const [overlayDifference, setOverlayDifference] = useState(false);
@@ -166,6 +176,7 @@ export default function Lane({
     const matchesPreset = VIEWPORT_PRESETS.some((p) => p.w === w && p.h === h);
     setCustomActive(!matchesPreset);
     if (!matchesPreset) {
+      setCustomUnit("px");
       if (w != null) setCustomW(String(w));
       if (h != null) setCustomH(String(h));
     }
@@ -346,6 +357,7 @@ export default function Lane({
       return URL.createObjectURL(file);
     });
     setOverlayName(file.name);
+    setOverlayIsPdf(file.type === "application/pdf");
   };
 
   const removeOverlay = () => {
@@ -354,6 +366,7 @@ export default function Lane({
       return null;
     });
     setOverlayName("");
+    setOverlayIsPdf(false);
   };
 
   useEffect(() => {
@@ -437,11 +450,13 @@ export default function Lane({
               for (const group of PRESET_SIZE_GROUPS) {
                 const size = group.sizes.find((s) => s.key === key);
                 if (size) {
-                  setViewportW(size.w);
-                  setViewportH(size.h);
-                  setCustomActive(true);
+                  const unit: "px" | "mm" = group.category.includes("(mm)") ? "mm" : "px";
+                  setCustomUnit(unit);
                   setCustomW(String(size.w));
                   setCustomH(String(size.h));
+                  setViewportW(Math.round(convertSize(size.w, unit, "px")));
+                  setViewportH(Math.round(convertSize(size.h, unit, "px")));
+                  setCustomActive(true);
                   break;
                 }
               }
@@ -475,14 +490,18 @@ export default function Lane({
           <input
             type="number"
             value={customW}
-            min={100}
-            max={3840}
-            title="Custom width (px)"
+            min={customUnit === "mm" ? 10 : 100}
+            max={customUnit === "mm" ? 3000 : 3840}
+            title={`Custom width (${customUnit})`}
             onChange={(e) => {
               setCustomW(e.target.value);
-              const w = parseInt(e.target.value);
-              const h = parseInt(customH);
-              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
+              const w = parseFloat(e.target.value);
+              const h = parseFloat(customH);
+              if (w > 0 && h > 0) {
+                setViewportW(Math.round(convertSize(w, customUnit, "px")));
+                setViewportH(Math.round(convertSize(h, customUnit, "px")));
+                setCustomActive(true);
+              }
             }}
             style={{
               width: 64, fontSize: 11, textAlign: "center",
@@ -496,14 +515,18 @@ export default function Lane({
           <input
             type="number"
             value={customH}
-            min={100}
-            max={2160}
-            title="Custom height (px)"
+            min={customUnit === "mm" ? 10 : 100}
+            max={customUnit === "mm" ? 3000 : 2160}
+            title={`Custom height (${customUnit})`}
             onChange={(e) => {
               setCustomH(e.target.value);
-              const w = parseInt(customW);
-              const h = parseInt(e.target.value);
-              if (w > 0 && h > 0) { setViewportW(w); setViewportH(h); setCustomActive(true); }
+              const w = parseFloat(customW);
+              const h = parseFloat(e.target.value);
+              if (w > 0 && h > 0) {
+                setViewportW(Math.round(convertSize(w, customUnit, "px")));
+                setViewportH(Math.round(convertSize(h, customUnit, "px")));
+                setCustomActive(true);
+              }
             }}
             style={{
               width: 64, fontSize: 11, textAlign: "center",
@@ -513,7 +536,35 @@ export default function Lane({
               color: "var(--text)",
             }}
           />
-          <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0, marginLeft: 1 }}>px</span>
+
+          <div
+            className="flex items-center shrink-0 rounded overflow-hidden"
+            style={{ border: "1px solid var(--border)", marginLeft: 2 }}
+            title="Switch the unit for the custom width/height fields"
+          >
+            {(["px", "mm"] as const).map((unit) => (
+              <button
+                key={unit}
+                onClick={() => {
+                  if (unit === customUnit) return;
+                  const w = parseFloat(customW);
+                  const h = parseFloat(customH);
+                  if (w > 0) setCustomW(String(Math.round(convertSize(w, customUnit, unit) * 100) / 100));
+                  if (h > 0) setCustomH(String(Math.round(convertSize(h, customUnit, unit) * 100) / 100));
+                  setCustomUnit(unit);
+                }}
+                className="shrink-0 transition-colors"
+                style={{
+                  fontSize: 10,
+                  padding: "1px 5px",
+                  background: customUnit === unit ? "var(--accent)" : "transparent",
+                  color: customUnit === unit ? "#fff" : "var(--text-muted)",
+                }}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
 
           <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 3px", flexShrink: 0 }} />
 
@@ -683,7 +734,7 @@ export default function Lane({
                 onClick={() => setShowOverlayPanel((v) => !v)}
                 className="flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors hover:bg-white/5"
                 style={{ color: showOverlayPanel || overlayUrl ? "var(--accent)" : "var(--text-muted)" }}
-                title={showOverlayPanel ? "Hide overlay panel" : "Overlay a reference image on top of this lane to check pixel alignment"}
+                title={showOverlayPanel ? "Hide overlay panel" : "Overlay a reference image or PDF on top of this lane to check pixel alignment"}
               >
                 <svg viewBox="0 0 20 20" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="11" height="11" rx="1.5" />
@@ -771,7 +822,7 @@ export default function Lane({
               className="shrink-0 rounded transition-colors hover:bg-white/5"
               style={{ fontSize: 11, padding: "1px 7px", color: "var(--accent)", whiteSpace: "nowrap" }}
             >
-              + Upload overlay image
+              + Upload overlay (image or PDF)
             </button>
           ) : (
             <>
@@ -918,20 +969,34 @@ export default function Lane({
                     mixBlendMode: overlayDifference ? "difference" : "normal",
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={overlayUrl}
-                    alt="Overlay reference"
-                    style={{
-                      maxWidth: `${zoom * 100}%`,
-                      maxHeight: `${zoom * 100}%`,
-                      width: "auto",
-                      height: "auto",
-                      objectFit: "contain",
-                      display: "block",
-                      filter: overlayInvert ? "invert(1)" : undefined,
-                    }}
-                  />
+                  {overlayIsPdf ? (
+                    <iframe
+                      src={overlayUrl}
+                      title="Overlay reference"
+                      style={{
+                        width: `${zoom * 100}%`,
+                        height: `${zoom * 100}%`,
+                        border: "none",
+                        display: "block",
+                        filter: overlayInvert ? "invert(1)" : undefined,
+                      }}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={overlayUrl}
+                      alt="Overlay reference"
+                      style={{
+                        maxWidth: `${zoom * 100}%`,
+                        maxHeight: `${zoom * 100}%`,
+                        width: "auto",
+                        height: "auto",
+                        objectFit: "contain",
+                        display: "block",
+                        filter: overlayInvert ? "invert(1)" : undefined,
+                      }}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -1256,7 +1321,7 @@ export default function Lane({
       <input
         ref={overlayInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf"
         className="hidden"
         onChange={(e) => handleOverlayFile(e.target.files)}
         onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
