@@ -143,6 +143,7 @@ export default function Lane({
   const [overlayOpacity, setOverlayOpacity] = useState(50);
   const [overlayInvert, setOverlayInvert] = useState(false);
   const [overlayDifference, setOverlayDifference] = useState(false);
+  const [overlayStretch, setOverlayStretch] = useState(false);
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
 
   // Track rendered pixel size for HTML assets
@@ -885,6 +886,20 @@ export default function Lane({
                 Difference
               </button>
 
+              <button
+                onClick={() => setOverlayStretch((v) => !v)}
+                disabled={overlayIsPdf}
+                className="shrink-0 rounded transition-colors disabled:opacity-30"
+                style={{
+                  fontSize: 11, padding: "1px 7px", whiteSpace: "nowrap",
+                  background: overlayStretch ? "var(--accent)" : "transparent",
+                  color: overlayStretch ? "#fff" : "var(--text-muted)",
+                }}
+                title="Stretch the overlay to fill the frame, ignoring its native aspect ratio"
+              >
+                Stretch
+              </button>
+
               <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
 
               <button
@@ -986,7 +1001,13 @@ export default function Lane({
                     <img
                       src={overlayUrl}
                       alt="Overlay reference"
-                      style={{
+                      style={overlayStretch ? {
+                        width: `${zoom * 100}%`,
+                        height: `${zoom * 100}%`,
+                        objectFit: "fill",
+                        display: "block",
+                        filter: overlayInvert ? "invert(1)" : undefined,
+                      } : {
                         maxWidth: `${zoom * 100}%`,
                         maxHeight: `${zoom * 100}%`,
                         width: "auto",
