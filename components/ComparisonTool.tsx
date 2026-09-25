@@ -227,6 +227,15 @@ export default function ComparisonTool() {
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [viewportSync, setViewportSync] = useState<{ w: number | null; h: number | null; nonce: number } | null>(null);
   const [sizePanelSync, setSizePanelSync] = useState<{ open: boolean; nonce: number; pulse?: boolean } | null>(null);
+  const [laneViewports, setLaneViewports] = useState<Record<string, { w: number | null; h: number | null }>>({});
+
+  const reportLaneViewport = useCallback((laneId: string, w: number | null, h: number | null) => {
+    setLaneViewports((prev) => {
+      const existing = prev[laneId];
+      if (existing && existing.w === w && existing.h === h) return prev;
+      return { ...prev, [laneId]: { w, h } };
+    });
+  }, []);
 
   const refreshAllPanels = () => setRefreshSignal((s) => s + 1);
 
@@ -700,6 +709,8 @@ export default function ComparisonTool() {
           <SliderComparison
             laneA={sliderableLanes[0]}
             laneB={sliderableLanes[1]}
+            viewportA={laneViewports[sliderableLanes[0].id]}
+            viewportB={laneViewports[sliderableLanes[1].id]}
             zoom={zoom}
             showGuides={showGuides}
             guideOpacity={guideOpacity}
@@ -749,6 +760,7 @@ export default function ComparisonTool() {
                 onApplyViewportToAll={applyViewportToAll}
                 sizePanelSync={sizePanelSync}
                 onSetSizePanelAll={setSizePanelForAll}
+                onViewportChange={(w, h) => reportLaneViewport(lane.id, w, h)}
               />
             ))}
           </div>

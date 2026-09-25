@@ -24,8 +24,8 @@ export async function loadPdfDocument(file: File): Promise<PDFDocumentProxy> {
   return pdfjsLib.getDocument({ data }).promise;
 }
 
-// Renders one page to a PNG data URL so it can be used like any other
-// overlay image (no embedded PDF viewer/controls).
+// Renders one page to a PNG data URL so it can be displayed like any other
+// image — no embedded PDF viewer/controls.
 export async function renderPdfPageToDataUrl(
   pdf: PDFDocumentProxy,
   pageNumber: number,

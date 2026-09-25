@@ -3,10 +3,16 @@
 import { useRef, useState, useEffect, MouseEvent, TouchEvent, RefObject } from "react";
 import { FileAsset, LaneData, CursorPos } from "./ComparisonTool";
 import BackButton from "./BackButton";
+import HtmlPreview from "./HtmlPreview";
+import { loadPdfDocument, renderPdfPageToDataUrl } from "@/lib/pdfRender";
+
+type LaneViewport = { w: number | null; h: number | null } | undefined;
 
 interface Props {
   laneA: LaneData;
   laneB: LaneData;
+  viewportA?: LaneViewport;
+  viewportB?: LaneViewport;
   zoom: number;
   showGuides?: boolean;
   guideOpacity?: number;
@@ -20,9 +26,58 @@ interface Props {
 
 const MAGNIFIER_SIZE = 180;
 
+// Renders a PDF's first page as a plain image (no embedded PDF viewer),
+// matching how PDFs are shown everywhere else in the app.
+function PdfPagePreview({ file, zoom, label }: { file: File | null; zoom: number; label: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setImageUrl(null);
+    if (!file) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdf = await loadPdfDocument(file);
+        const dataUrl = await renderPdfPageToDataUrl(pdf, 1);
+        if (!cancelled) setImageUrl(dataUrl);
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [file]);
+
+  if (!imageUrl) {
+    return (
+      <div className="flex items-center justify-center w-full h-full text-sm" style={{ color: "var(--text-muted)" }}>
+        Rendering PDF…
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={imageUrl}
+      alt={label}
+      style={{
+        maxWidth: `${zoom * 100}%`,
+        maxHeight: `${zoom * 100}%`,
+        width: "auto",
+        height: "auto",
+        objectFit: "contain",
+        display: "block",
+      }}
+      draggable={false}
+    />
+  );
+}
+
 export default function SliderComparison({
   laneA,
   laneB,
+  viewportA,
+  viewportB,
   zoom,
   showGuides,
   guideOpacity = 1,
@@ -123,7 +178,12 @@ export default function SliderComparison({
     userSelect: "none" as const,
   };
 
-  const renderPane = (asset: FileAsset, label: string, ref?: RefObject<HTMLImageElement | null>) => {
+  const renderPane = (
+    asset: FileAsset,
+    label: string,
+    ref?: RefObject<HTMLImageElement | null>,
+    viewport?: LaneViewport
+  ) => {
     if (asset.type === "video") {
       return (
         <video
@@ -141,31 +201,16 @@ export default function SliderComparison({
     }
 
     if (asset.type === "pdf") {
-      return (
-        <iframe
-          src={asset.url}
-          title={label}
-          style={{ width: "100%", height: "100%", border: "none" }}
-        />
-      );
+      return <PdfPagePreview file={asset.file} zoom={zoom} label={label} />;
     }
 
     if (asset.type === "html" || asset.type === "url") {
       return (
-        <iframe
-          src={asset.url}
-          title={label}
-          sandbox="allow-scripts allow-same-origin"
-          style={{
-            border: "none",
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: `${(1 / zoom) * 100}%`,
-            height: `${(1 / zoom) * 100}%`,
-            transform: `scale(${zoom})`,
-            transformOrigin: "top left",
-          }}
+        <HtmlPreview
+          asset={asset}
+          zoom={zoom}
+          viewportW={viewport?.w}
+          viewportH={viewport?.h}
         />
       );
     }
@@ -218,7 +263,7 @@ export default function SliderComparison({
       >
         {/* Asset B (right, full width) */}
         <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
-          {renderPane(laneB.asset!, laneB.label, imgBRef)}
+          {renderPane(laneB.asset!, laneB.label, imgBRef, viewportB)}
         </div>
 
         {/* Asset A (left, clipped) */}
@@ -226,7 +271,7 @@ export default function SliderComparison({
           className="absolute inset-0 overflow-hidden flex items-center justify-center"
           style={{ clipPath: `inset(0 ${100 - splitPct}% 0 0)` }}
         >
-          {renderPane(laneA.asset!, laneA.label, imgARef)}
+          {renderPane(laneA.asset!, laneA.label, imgARef, viewportA)}
         </div>
 
         {/* Divider line */}

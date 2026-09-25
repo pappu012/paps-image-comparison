@@ -5,7 +5,7 @@ import { LaneData, CursorPos, StickyGuide } from "./ComparisonTool";
 import { HtmlFolderEntry, readDirectoryEntry } from "@/lib/htmlFolder";
 import FilePreview from "./FilePreview";
 import { PRESET_SIZE_GROUPS } from "@/lib/presetSizes";
-import { loadPdfDocument, renderPdfPageToDataUrl } from "@/lib/pdfOverlay";
+import { loadPdfDocument, renderPdfPageToDataUrl } from "@/lib/pdfRender";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
 const ACCEPTED = [
@@ -78,6 +78,7 @@ interface Props {
   onApplyViewportToAll?: (w: number | null, h: number | null) => void;
   sizePanelSync?: { open: boolean; nonce: number; pulse?: boolean } | null;
   onSetSizePanelAll?: (open: boolean, pulse?: boolean) => void;
+  onViewportChange?: (w: number | null, h: number | null) => void;
 }
 
 export default function Lane({
@@ -112,6 +113,7 @@ export default function Lane({
   onApplyViewportToAll,
   sizePanelSync,
   onSetSizePanelAll,
+  onViewportChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -147,10 +149,71 @@ export default function Lane({
   const [overlayDifference, setOverlayDifference] = useState(false);
   const [overlayStretch, setOverlayStretch] = useState(false);
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
-  const [pdfPageNum, setPdfPageNum] = useState(1);
-  const [pdfPageCount, setPdfPageCount] = useState(0);
-  const [pdfRendering, setPdfRendering] = useState(false);
-  const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
+  const [overlayPdfPageNum, setOverlayPdfPageNum] = useState(1);
+  const [overlayPdfPageCount, setOverlayPdfPageCount] = useState(0);
+  const [overlayPdfRendering, setOverlayPdfRendering] = useState(false);
+  const overlayPdfDocRef = useRef<PDFDocumentProxy | null>(null);
+  const [mainPdfPageNum, setMainPdfPageNum] = useState(1);
+  const [mainPdfPageCount, setMainPdfPageCount] = useState(0);
+  const [mainPdfRendering, setMainPdfRendering] = useState(false);
+  const [mainPdfImageUrl, setMainPdfImageUrl] = useState<string | null>(null);
+  const mainPdfDocRef = useRef<PDFDocumentProxy | null>(null);
+
+  // Render the main asset's PDF pages as plain images (no embedded PDF
+  // viewer/toolbar), same treatment as the overlay.
+  useEffect(() => {
+    if (lane.asset?.type !== "pdf" || !lane.asset.file) {
+      mainPdfDocRef.current = null;
+      setMainPdfImageUrl(null);
+      setMainPdfPageCount(0);
+      setMainPdfPageNum(1);
+      return;
+    }
+    const file = lane.asset.file;
+    let cancelled = false;
+    setMainPdfRendering(true);
+    setMainPdfImageUrl(null);
+    (async () => {
+      try {
+        const pdf = await loadPdfDocument(file);
+        if (cancelled) return;
+        mainPdfDocRef.current = pdf;
+        const dataUrl = await renderPdfPageToDataUrl(pdf, 1);
+        if (cancelled) return;
+        setMainPdfImageUrl(dataUrl);
+        setMainPdfPageCount(pdf.numPages);
+        setMainPdfPageNum(1);
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      } finally {
+        if (!cancelled) setMainPdfRendering(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lane.asset?.id, lane.asset?.type]);
+
+  const goToMainPdfPage = async (page: number) => {
+    const pdf = mainPdfDocRef.current;
+    if (!pdf || page < 1 || page > pdf.numPages || mainPdfRendering) return;
+    setMainPdfRendering(true);
+    try {
+      const dataUrl = await renderPdfPageToDataUrl(pdf, page);
+      setMainPdfImageUrl(dataUrl);
+      setMainPdfPageNum(page);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMainPdfRendering(false);
+    }
+  };
+
+  // Report this lane's custom viewport size upward so other views (e.g. the
+  // slider) can reuse it instead of ignoring it.
+  useEffect(() => {
+    onViewportChange?.(viewportW, viewportH);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewportW, viewportH]);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -366,9 +429,9 @@ export default function Lane({
   const handleOverlayFile = (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
-    pdfDocRef.current = null;
-    setPdfPageCount(0);
-    setPdfPageNum(1);
+    overlayPdfDocRef.current = null;
+    setOverlayPdfPageCount(0);
+    setOverlayPdfPageNum(1);
     if (file.type === "application/pdf") {
       loadPdfOverlay(file);
       return;
@@ -381,36 +444,36 @@ export default function Lane({
   // Renders a single PDF page to an image so it behaves like any other
   // overlay (no embedded PDF viewer/toolbar), and lets the user page through it.
   const loadPdfOverlay = async (file: File) => {
-    setPdfRendering(true);
+    setOverlayPdfRendering(true);
     try {
       const pdf = await loadPdfDocument(file);
-      pdfDocRef.current = pdf;
+      overlayPdfDocRef.current = pdf;
       const dataUrl = await renderPdfPageToDataUrl(pdf, 1);
       setOverlaySrc(dataUrl);
       setOverlayName(file.name);
       setOverlayIsPdf(true);
-      setPdfPageCount(pdf.numPages);
-      setPdfPageNum(1);
+      setOverlayPdfPageCount(pdf.numPages);
+      setOverlayPdfPageNum(1);
     } catch (err) {
       console.error(err);
       alert("Could not read that PDF.");
     } finally {
-      setPdfRendering(false);
+      setOverlayPdfRendering(false);
     }
   };
 
-  const goToPdfPage = async (page: number) => {
-    const pdf = pdfDocRef.current;
-    if (!pdf || page < 1 || page > pdf.numPages || pdfRendering) return;
-    setPdfRendering(true);
+  const goToOverlayPdfPage = async (page: number) => {
+    const pdf = overlayPdfDocRef.current;
+    if (!pdf || page < 1 || page > pdf.numPages || overlayPdfRendering) return;
+    setOverlayPdfRendering(true);
     try {
       const dataUrl = await renderPdfPageToDataUrl(pdf, page);
       setOverlaySrc(dataUrl);
-      setPdfPageNum(page);
+      setOverlayPdfPageNum(page);
     } catch (err) {
       console.error(err);
     } finally {
-      setPdfRendering(false);
+      setOverlayPdfRendering(false);
     }
   };
 
@@ -418,9 +481,9 @@ export default function Lane({
     setOverlaySrc(null);
     setOverlayName("");
     setOverlayIsPdf(false);
-    setPdfPageCount(0);
-    setPdfPageNum(1);
-    pdfDocRef.current = null;
+    setOverlayPdfPageCount(0);
+    setOverlayPdfPageNum(1);
+    overlayPdfDocRef.current = null;
   };
 
   useEffect(() => {
@@ -859,6 +922,41 @@ export default function Lane({
         </div>
       </div>
 
+      {/* PDF page picker for the main asset */}
+      {lane.asset?.type === "pdf" && (
+        <div
+          className="flex items-center gap-2 px-2 shrink-0"
+          style={{
+            borderBottom: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            height: 30,
+            minHeight: 30,
+          }}
+        >
+          <button
+            onClick={() => goToMainPdfPage(mainPdfPageNum - 1)}
+            disabled={mainPdfPageNum <= 1 || mainPdfRendering}
+            className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
+            style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
+            title="Previous page"
+          >
+            ‹
+          </button>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+            {mainPdfRendering ? "…" : `Page ${mainPdfPageNum} / ${mainPdfPageCount}`}
+          </span>
+          <button
+            onClick={() => goToMainPdfPage(mainPdfPageNum + 1)}
+            disabled={mainPdfPageNum >= mainPdfPageCount || mainPdfRendering}
+            className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
+            style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
+            title="Next page"
+          >
+            ›
+          </button>
+        </div>
+      )}
+
       {/* Overlay toolbar */}
       {showOverlayPanel && (
         <div
@@ -899,8 +997,8 @@ export default function Lane({
                 <>
                   <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
                   <button
-                    onClick={() => goToPdfPage(pdfPageNum - 1)}
-                    disabled={pdfPageNum <= 1 || pdfRendering}
+                    onClick={() => goToOverlayPdfPage(overlayPdfPageNum - 1)}
+                    disabled={overlayPdfPageNum <= 1 || overlayPdfRendering}
                     className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
                     style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
                     title="Previous page"
@@ -908,11 +1006,11 @@ export default function Lane({
                     ‹
                   </button>
                   <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
-                    {pdfRendering ? "…" : `Page ${pdfPageNum} / ${pdfPageCount}`}
+                    {overlayPdfRendering ? "…" : `Page ${overlayPdfPageNum} / ${overlayPdfPageCount}`}
                   </span>
                   <button
-                    onClick={() => goToPdfPage(pdfPageNum + 1)}
-                    disabled={pdfPageNum >= pdfPageCount || pdfRendering}
+                    onClick={() => goToOverlayPdfPage(overlayPdfPageNum + 1)}
+                    disabled={overlayPdfPageNum >= overlayPdfPageCount || overlayPdfRendering}
                     className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
                     style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
                     title="Next page"
@@ -1054,6 +1152,8 @@ export default function Lane({
                 viewportH={viewportH}
                 imgRef={imgRef}
                 iframeRef={iframeRef}
+                pdfPageUrl={mainPdfImageUrl}
+                pdfRendering={mainPdfRendering}
               />
               {overlayUrl && (
                 <div
