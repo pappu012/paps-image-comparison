@@ -5,6 +5,8 @@ import { LaneData, CursorPos, StickyGuide } from "./ComparisonTool";
 import { HtmlFolderEntry, readDirectoryEntry } from "@/lib/htmlFolder";
 import FilePreview from "./FilePreview";
 import { PRESET_SIZE_GROUPS } from "@/lib/presetSizes";
+import { loadPdfDocument, renderPdfPageToDataUrl } from "@/lib/pdfOverlay";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 const ACCEPTED = [
   "image/jpeg",
@@ -145,6 +147,10 @@ export default function Lane({
   const [overlayDifference, setOverlayDifference] = useState(false);
   const [overlayStretch, setOverlayStretch] = useState(false);
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
+  const [pdfPageNum, setPdfPageNum] = useState(1);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfRendering, setPdfRendering] = useState(false);
+  const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
 
   // Track rendered pixel size for HTML assets
   useEffect(() => {
@@ -350,24 +356,71 @@ export default function Lane({
     else setLabelDraft(lane.label);
   };
 
+  const setOverlaySrc = (next: string | null) => {
+    setOverlayUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return next;
+    });
+  };
+
   const handleOverlayFile = (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
-    setOverlayUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
+    pdfDocRef.current = null;
+    setPdfPageCount(0);
+    setPdfPageNum(1);
+    if (file.type === "application/pdf") {
+      loadPdfOverlay(file);
+      return;
+    }
+    setOverlaySrc(URL.createObjectURL(file));
     setOverlayName(file.name);
-    setOverlayIsPdf(file.type === "application/pdf");
+    setOverlayIsPdf(false);
+  };
+
+  // Renders a single PDF page to an image so it behaves like any other
+  // overlay (no embedded PDF viewer/toolbar), and lets the user page through it.
+  const loadPdfOverlay = async (file: File) => {
+    setPdfRendering(true);
+    try {
+      const pdf = await loadPdfDocument(file);
+      pdfDocRef.current = pdf;
+      const dataUrl = await renderPdfPageToDataUrl(pdf, 1);
+      setOverlaySrc(dataUrl);
+      setOverlayName(file.name);
+      setOverlayIsPdf(true);
+      setPdfPageCount(pdf.numPages);
+      setPdfPageNum(1);
+    } catch (err) {
+      console.error(err);
+      alert("Could not read that PDF.");
+    } finally {
+      setPdfRendering(false);
+    }
+  };
+
+  const goToPdfPage = async (page: number) => {
+    const pdf = pdfDocRef.current;
+    if (!pdf || page < 1 || page > pdf.numPages || pdfRendering) return;
+    setPdfRendering(true);
+    try {
+      const dataUrl = await renderPdfPageToDataUrl(pdf, page);
+      setOverlaySrc(dataUrl);
+      setPdfPageNum(page);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPdfRendering(false);
+    }
   };
 
   const removeOverlay = () => {
-    setOverlayUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+    setOverlaySrc(null);
     setOverlayName("");
     setOverlayIsPdf(false);
+    setPdfPageCount(0);
+    setPdfPageNum(1);
+    pdfDocRef.current = null;
   };
 
   useEffect(() => {
@@ -842,6 +895,33 @@ export default function Lane({
                 ↑ Replace
               </button>
 
+              {overlayIsPdf && (
+                <>
+                  <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+                  <button
+                    onClick={() => goToPdfPage(pdfPageNum - 1)}
+                    disabled={pdfPageNum <= 1 || pdfRendering}
+                    className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
+                    style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
+                    title="Previous page"
+                  >
+                    ‹
+                  </button>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                    {pdfRendering ? "…" : `Page ${pdfPageNum} / ${pdfPageCount}`}
+                  </span>
+                  <button
+                    onClick={() => goToPdfPage(pdfPageNum + 1)}
+                    disabled={pdfPageNum >= pdfPageCount || pdfRendering}
+                    className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
+                    style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)" }}
+                    title="Next page"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+
               <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
 
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Opacity</span>
@@ -888,8 +968,7 @@ export default function Lane({
 
               <button
                 onClick={() => setOverlayStretch((v) => !v)}
-                disabled={overlayIsPdf}
-                className="shrink-0 rounded transition-colors disabled:opacity-30"
+                className="shrink-0 rounded transition-colors"
                 style={{
                   fontSize: 11, padding: "1px 7px", whiteSpace: "nowrap",
                   background: overlayStretch ? "var(--accent)" : "transparent",
@@ -984,40 +1063,26 @@ export default function Lane({
                     mixBlendMode: overlayDifference ? "difference" : "normal",
                   }}
                 >
-                  {overlayIsPdf ? (
-                    <iframe
-                      src={overlayUrl}
-                      title="Overlay reference"
-                      style={{
-                        width: `${zoom * 100}%`,
-                        height: `${zoom * 100}%`,
-                        border: "none",
-                        display: "block",
-                        filter: overlayInvert ? "invert(1)" : undefined,
-                      }}
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={overlayUrl}
-                      alt="Overlay reference"
-                      style={overlayStretch ? {
-                        width: `${zoom * 100}%`,
-                        height: `${zoom * 100}%`,
-                        objectFit: "fill",
-                        display: "block",
-                        filter: overlayInvert ? "invert(1)" : undefined,
-                      } : {
-                        maxWidth: `${zoom * 100}%`,
-                        maxHeight: `${zoom * 100}%`,
-                        width: "auto",
-                        height: "auto",
-                        objectFit: "contain",
-                        display: "block",
-                        filter: overlayInvert ? "invert(1)" : undefined,
-                      }}
-                    />
-                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={overlayUrl}
+                    alt="Overlay reference"
+                    style={overlayStretch ? {
+                      width: `${zoom * 100}%`,
+                      height: `${zoom * 100}%`,
+                      objectFit: "fill",
+                      display: "block",
+                      filter: overlayInvert ? "invert(1)" : undefined,
+                    } : {
+                      maxWidth: `${zoom * 100}%`,
+                      maxHeight: `${zoom * 100}%`,
+                      width: "auto",
+                      height: "auto",
+                      objectFit: "contain",
+                      display: "block",
+                      filter: overlayInvert ? "invert(1)" : undefined,
+                    }}
+                  />
                 </div>
               )}
             </div>
