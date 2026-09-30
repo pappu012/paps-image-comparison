@@ -55,7 +55,11 @@ interface OverlayItem {
   pdfPageCount: number;
   offsetX: number;
   offsetY: number;
+  scale: number;
 }
+
+const OVERLAY_MIN_SCALE = 0.1;
+const OVERLAY_MAX_SCALE = 4;
 
 interface Props {
   lane: LaneData;
@@ -161,6 +165,8 @@ export default function Lane({
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [overlayDragging, setOverlayDragging] = useState(false);
+  const [overlayResizing, setOverlayResizing] = useState(false);
+  const overlayImgWrapperRef = useRef<HTMLDivElement>(null);
   const overlayPdfDocsRef = useRef<Map<string, PDFDocumentProxy>>(new Map());
   const overlayItemsRef = useRef<OverlayItem[]>([]);
   overlayItemsRef.current = overlayItems;
@@ -452,7 +458,7 @@ export default function Lane({
             const dataUrl = await renderPdfPageToDataUrl(pdf, 1);
             setOverlayItems((prev) => [...prev, {
               id, name: file.name, url: dataUrl, isPdf: true,
-              pdfPageNum: 1, pdfPageCount: pdf.numPages, offsetX: 0, offsetY: 0,
+              pdfPageNum: 1, pdfPageCount: pdf.numPages, offsetX: 0, offsetY: 0, scale: 1,
             }]);
           } catch (err) {
             console.error(err);
@@ -462,7 +468,7 @@ export default function Lane({
         } else {
           setOverlayItems((prev) => [...prev, {
             id, name: file.name, url: URL.createObjectURL(file), isPdf: false,
-            pdfPageNum: 1, pdfPageCount: 0, offsetX: 0, offsetY: 0,
+            pdfPageNum: 1, pdfPageCount: 0, offsetX: 0, offsetY: 0, scale: 1,
           }]);
         }
         lastId = id;
@@ -506,6 +512,10 @@ export default function Lane({
     if (activeOverlayId) updateOverlayItem(activeOverlayId, { offsetX: 0, offsetY: 0 });
   };
 
+  const resetActiveOverlayScale = () => {
+    if (activeOverlayId) updateOverlayItem(activeOverlayId, { scale: 1 });
+  };
+
   const handleOverlayDragStart = (e: MouseEvent<HTMLDivElement>) => {
     if (!activeOverlay) return;
     e.preventDefault();
@@ -525,6 +535,47 @@ export default function Lane({
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
+  };
+
+  // Corner-handle drag resize — scales the overlay from its center, measured
+  // by how far the cursor moves relative to the image's own rendered size
+  // (so it feels proportional whether the image is tiny or huge on screen).
+  const handleOverlayResizeStart = (e: MouseEvent<HTMLDivElement>) => {
+    if (!activeOverlay) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const wrapper = overlayImgWrapperRef.current;
+    if (!wrapper) return;
+    const rect = wrapper.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const startDist = Math.hypot(e.clientX - centerX, e.clientY - centerY) || 1;
+    const baseScale = activeOverlay.scale;
+    const id = activeOverlay.id;
+    setOverlayResizing(true);
+    const move = (ev: globalThis.MouseEvent) => {
+      const dist = Math.hypot(ev.clientX - centerX, ev.clientY - centerY);
+      const next = Math.min(OVERLAY_MAX_SCALE, Math.max(OVERLAY_MIN_SCALE, baseScale * (dist / startDist)));
+      updateOverlayItem(id, { scale: next });
+    };
+    const up = () => {
+      setOverlayResizing(false);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  // Ctrl/Cmd + scroll-wheel over the overlay also resizes it, for quick
+  // fine-tuning without reaching for the slider or the corner handle.
+  const handleOverlayWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!activeOverlay || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const factor = e.deltaY > 0 ? 0.95 : 1.05;
+    const next = Math.min(OVERLAY_MAX_SCALE, Math.max(OVERLAY_MIN_SCALE, activeOverlay.scale * factor));
+    updateOverlayItem(activeOverlay.id, { scale: next });
   };
 
   useEffect(() => {
@@ -1117,6 +1168,32 @@ export default function Lane({
 
               <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
 
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Size</span>
+              <input
+                type="range"
+                min={Math.round(OVERLAY_MIN_SCALE * 100)}
+                max={Math.round(OVERLAY_MAX_SCALE * 100)}
+                value={Math.round(activeOverlay.scale * 100)}
+                onChange={(e) => updateOverlayItem(activeOverlay.id, { scale: Number(e.target.value) / 100 })}
+                className="w-20 accent-current shrink-0"
+                style={{ color: "var(--accent)" }}
+                title="Resize the overlay image"
+              />
+              <span style={{ fontSize: 11, color: "var(--text-muted)", width: 34, flexShrink: 0 }}>
+                {Math.round(activeOverlay.scale * 100)}%
+              </span>
+              <button
+                onClick={resetActiveOverlayScale}
+                disabled={activeOverlay.scale === 1}
+                className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
+                style={{ fontSize: 11, padding: "1px 6px", color: "var(--text-muted)", whiteSpace: "nowrap" }}
+                title="Reset size to 100%"
+              >
+                ↺
+              </button>
+
+              <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+
               <button
                 onClick={() => setOverlayInvert((v) => !v)}
                 className="shrink-0 rounded transition-colors"
@@ -1253,10 +1330,13 @@ export default function Lane({
                   }}
                 >
                   <div
+                    ref={overlayImgWrapperRef}
                     onMouseDown={handleOverlayDragStart}
-                    title="Drag to reposition"
+                    onWheel={handleOverlayWheel}
+                    title="Drag to reposition · Ctrl/Cmd+scroll to resize"
+                    className="relative"
                     style={{
-                      transform: `translate(${activeOverlay.offsetX}px, ${activeOverlay.offsetY}px)`,
+                      transform: `translate(${activeOverlay.offsetX}px, ${activeOverlay.offsetY}px) scale(${activeOverlay.scale})`,
                       cursor: overlayDragging ? "grabbing" : "grab",
                       pointerEvents: "auto",
                       lineHeight: 0,
@@ -1281,6 +1361,25 @@ export default function Lane({
                         objectFit: "contain",
                         display: "block",
                         filter: overlayInvert ? "invert(1)" : undefined,
+                      }}
+                    />
+                    {/* Corner resize handle */}
+                    <div
+                      onMouseDown={handleOverlayResizeStart}
+                      title="Drag to resize"
+                      className="absolute"
+                      style={{
+                        right: -6,
+                        bottom: -6,
+                        width: 13,
+                        height: 13,
+                        borderRadius: "50%",
+                        background: "var(--accent)",
+                        border: "2px solid #fff",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+                        cursor: "nwse-resize",
+                        opacity: overlayResizing ? 1 : 0.85,
+                        transform: `scale(${1 / activeOverlay.scale})`,
                       }}
                     />
                   </div>
