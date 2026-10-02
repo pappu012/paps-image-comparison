@@ -1154,34 +1154,53 @@ export default function Lane({
 
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Opacity</span>
               <input
-                type="range"
+                type="number"
                 min={0}
                 max={100}
                 value={overlayOpacity}
-                onChange={(e) => setOverlayOpacity(Number(e.target.value))}
-                className="w-20 accent-current shrink-0"
-                style={{ color: "var(--accent)" }}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isNaN(n)) setOverlayOpacity(Math.min(100, Math.max(0, n)));
+                }}
+                className="shrink-0 text-right rounded outline-none"
+                style={{
+                  width: 44,
+                  fontSize: 11,
+                  padding: "1px 4px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                }}
               />
-              <span style={{ fontSize: 11, color: "var(--text-muted)", width: 30, flexShrink: 0 }}>
-                {overlayOpacity}%
-              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>%</span>
 
               <div style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
 
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Size</span>
               <input
-                type="range"
+                type="number"
                 min={Math.round(OVERLAY_MIN_SCALE * 100)}
                 max={Math.round(OVERLAY_MAX_SCALE * 100)}
                 value={Math.round(activeOverlay.scale * 100)}
-                onChange={(e) => updateOverlayItem(activeOverlay.id, { scale: Number(e.target.value) / 100 })}
-                className="w-20 accent-current shrink-0"
-                style={{ color: "var(--accent)" }}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isNaN(n)) {
+                    const clamped = Math.min(OVERLAY_MAX_SCALE * 100, Math.max(OVERLAY_MIN_SCALE * 100, n));
+                    updateOverlayItem(activeOverlay.id, { scale: clamped / 100 });
+                  }
+                }}
+                className="shrink-0 text-right rounded outline-none"
+                style={{
+                  width: 48,
+                  fontSize: 11,
+                  padding: "1px 4px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                }}
                 title="Resize the overlay image"
               />
-              <span style={{ fontSize: 11, color: "var(--text-muted)", width: 34, flexShrink: 0 }}>
-                {Math.round(activeOverlay.scale * 100)}%
-              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>%</span>
               <button
                 onClick={resetActiveOverlayScale}
                 disabled={activeOverlay.scale === 1}
