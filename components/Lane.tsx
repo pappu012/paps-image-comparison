@@ -1179,9 +1179,10 @@ export default function Lane({
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Size</span>
               <input
                 type="number"
+                step={0.1}
                 min={Math.round(OVERLAY_MIN_SCALE * 100)}
                 max={Math.round(OVERLAY_MAX_SCALE * 100)}
-                value={Math.round(activeOverlay.scale * 100)}
+                value={Math.round(activeOverlay.scale * 1000) / 10}
                 onChange={(e) => {
                   const n = Number(e.target.value);
                   if (!Number.isNaN(n)) {
@@ -1191,14 +1192,14 @@ export default function Lane({
                 }}
                 className="shrink-0 text-right rounded outline-none"
                 style={{
-                  width: 48,
+                  width: 56,
                   fontSize: 11,
                   padding: "1px 4px",
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
                   color: "var(--text)",
                 }}
-                title="Resize the overlay image"
+                title="Resize the overlay image — supports decimals, e.g. 10.5"
               />
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>%</span>
               <button
@@ -1259,9 +1260,9 @@ export default function Lane({
                 disabled={activeOverlay.offsetX === 0 && activeOverlay.offsetY === 0}
                 className="shrink-0 rounded transition-colors hover:bg-white/5 disabled:opacity-30"
                 style={{ fontSize: 11, padding: "1px 7px", color: "var(--text-muted)", whiteSpace: "nowrap" }}
-                title="Drag the overlay on the canvas to move it — this resets it back to centred"
+                title="Centre the overlay inside the container — drag it on the canvas to move it again"
               >
-                ↺ Reset position
+                ⊙ Center
               </button>
 
               <button
