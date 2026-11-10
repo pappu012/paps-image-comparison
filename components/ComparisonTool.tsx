@@ -6,6 +6,7 @@ import SliderComparison from "./SliderComparison";
 import DiffView from "./DiffView";
 import VisualCheck from "./VisualCheck";
 import { buildHtmlFolder, type HtmlFolderEntry } from "@/lib/htmlFolder";
+import { parseLanePresetConfig } from "@/lib/parseLanePresets";
 
 export type FileAsset = {
   id: string;
@@ -22,6 +23,7 @@ export type LaneData = {
   id: string;
   label: string;
   asset: FileAsset | null;
+  initialViewport?: { w: number; h: number } | null;
 };
 
 export type CursorPos = { x: number; y: number } | null;
@@ -85,6 +87,15 @@ function IconLayers() {
       <path d="M10 3 3 7l7 4 7-4-7-4Z" />
       <path d="M3 10.5 10 14.5 17 10.5" />
       <path d="M3 13.5 10 17.5 17 13.5" />
+    </svg>
+  );
+}
+
+function IconList() {
+  return (
+    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 5h9M8 10h9M8 15h9" />
+      <path d="M3.5 5h.01M3.5 10h.01M3.5 15h.01" />
     </svg>
   );
 }
@@ -299,6 +310,34 @@ export default function ComparisonTool() {
     ]);
   };
 
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const addLanesFromPresetText = () => {
+    try {
+      const presets = parseLanePresetConfig(importText);
+      if (presets.length === 0) {
+        setImportError("That list is empty.");
+        return;
+      }
+      setLanes((prev) => [
+        ...prev,
+        ...presets.map((p, i) => ({
+          id: `${Date.now()}-${i}`,
+          label: p.label,
+          asset: null,
+          initialViewport: { w: p.width, h: p.height },
+        })),
+      ]);
+      setImportText("");
+      setImportError(null);
+      setShowImportPanel(false);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const removeLane = (id: string) => {
     setLanes((prev) => prev.filter((l) => l.id !== id));
   };
@@ -361,6 +400,24 @@ export default function ComparisonTool() {
       prev.map((l) => {
         if (l.id !== laneId) return l;
         if (l.asset && l.asset.type !== "url") URL.revokeObjectURL(l.asset.url);
+        return { ...l, asset };
+      })
+    );
+    setZoom(1);
+  }, []);
+
+  const setUrlForAllLanes = useCallback((url: string) => {
+    setLanes((prev) =>
+      prev.map((l, i) => {
+        if (l.asset && l.asset.type !== "url") URL.revokeObjectURL(l.asset.url);
+        const asset: FileAsset = {
+          id: `${Date.now()}-${i}`,
+          file: null,
+          url,
+          type: "url",
+          ext: "URL",
+          displayName: url,
+        };
         return { ...l, asset };
       })
     );
@@ -463,6 +520,67 @@ export default function ComparisonTool() {
               Add
             </span>
           </button>
+
+          <div className="relative w-full flex flex-col items-center">
+            <RailIcon
+              active={showImportPanel}
+              title="Add lanes from a pasted list of { label, width, height }"
+              label="Import"
+              onClick={() => setShowImportPanel((v) => !v)}
+            >
+              <IconList />
+            </RailIcon>
+
+            {showImportPanel && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowImportPanel(false)} />
+                <div
+                  className="absolute left-full top-0 ml-2 z-50 w-80 rounded-3xl p-3 flex flex-col gap-2 glass-panel"
+                  style={{ border: "1px solid var(--border)" }}
+                >
+                  <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: "var(--text-muted)" }}>
+                    Add lanes from a size list
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    Paste an array of {"{ label, width, height }"} — one lane per entry, pre-sized for HTML/URL assets.
+                  </p>
+                  <textarea
+                    autoFocus
+                    value={importText}
+                    onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
+                    placeholder={'{ label: `MREC`, width: 300, height: 250 },\n{ label: `Leaderboard`, width: 728, height: 90 },'}
+                    rows={8}
+                    className="text-xs rounded-lg p-2 outline-none font-mono"
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text)",
+                      resize: "vertical",
+                    }}
+                  />
+                  {importError && (
+                    <p className="text-xs" style={{ color: "#e5877a" }}>{importError}</p>
+                  )}
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      onClick={() => { setShowImportPanel(false); setImportError(null); }}
+                      className="text-xs px-3 py-1.5 rounded-full"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={addLanesFromPresetText}
+                      className="text-xs px-3 py-1.5 rounded-full font-medium"
+                      style={{ background: "var(--accent)", color: "var(--accent-text)" }}
+                    >
+                      Add Lanes
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex flex-col items-center gap-2.5 w-full px-1 relative">
           <RailIcon active={showInfoPopup} title="Lanes & supported formats" label="Info" onClick={() => setShowInfoPopup((v) => !v)}>
@@ -749,6 +867,7 @@ export default function ComparisonTool() {
                 onSetAsset={(file) => setAsset(lane.id, file)}
                 onSetHtmlFolder={(entries) => setHtmlFolder(lane.id, entries)}
                 onSetUrl={(url) => setUrl(lane.id, url)}
+                onApplyUrlToAll={setUrlForAllLanes}
                 onClear={() => clearAsset(lane.id)}
                 onRemove={() => removeLane(lane.id)}
                 onLabelChange={(label) => updateLabel(lane.id, label)}

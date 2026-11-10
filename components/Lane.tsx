@@ -82,6 +82,7 @@ interface Props {
   onSetAsset: (file: File) => void;
   onSetHtmlFolder: (entries: HtmlFolderEntry[]) => void;
   onSetUrl: (url: string) => void;
+  onApplyUrlToAll?: (url: string) => void;
   onClear: () => void;
   onRemove: () => void;
   onLabelChange: (label: string) => void;
@@ -117,6 +118,7 @@ export default function Lane({
   onSetAsset,
   onSetHtmlFolder,
   onSetUrl,
+  onApplyUrlToAll,
   onClear,
   onRemove,
   onLabelChange,
@@ -148,17 +150,19 @@ export default function Lane({
   const [urlDraft, setUrlDraft] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [htmlDimensions, setHtmlDimensions] = useState<{ w: number; h: number } | null>(null);
-  const [viewportW, setViewportW] = useState<number | null>(null);
-  const [viewportH, setViewportH] = useState<number | null>(null);
-  const [customW, setCustomW] = useState("1280");
-  const [customH, setCustomH] = useState("800");
+  const [viewportW, setViewportW] = useState<number | null>(lane.initialViewport?.w ?? null);
+  const [viewportH, setViewportH] = useState<number | null>(lane.initialViewport?.h ?? null);
+  const [customW, setCustomW] = useState(lane.initialViewport ? String(lane.initialViewport.w) : "1280");
+  const [customH, setCustomH] = useState(lane.initialViewport ? String(lane.initialViewport.h) : "800");
   const [customUnit, setCustomUnit] = useState<"px" | "mm">("px");
-  const [customActive, setCustomActive] = useState(false);
+  const [customActive, setCustomActive] = useState(!!lane.initialViewport);
   const [showViewportPanel, setShowViewportPanel] = useState(false);
   const [sizeButtonPulseKey, setSizeButtonPulseKey] = useState(0);
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
   const [activeOverlayId, setActiveOverlayId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(50);
+  const [opacityDraft, setOpacityDraft] = useState<string | null>(null);
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
   const [overlayInvert, setOverlayInvert] = useState(false);
   const [overlayDifference, setOverlayDifference] = useState(false);
   const [overlayStretch, setOverlayStretch] = useState(false);
@@ -171,6 +175,10 @@ export default function Lane({
   const overlayItemsRef = useRef<OverlayItem[]>([]);
   overlayItemsRef.current = overlayItems;
   const activeOverlay = overlayItems.find((o) => o.id === activeOverlayId) ?? null;
+
+  useEffect(() => {
+    setSizeDraft(null);
+  }, [activeOverlayId]);
   const [mainPdfPageNum, setMainPdfPageNum] = useState(1);
   const [mainPdfPageCount, setMainPdfPageCount] = useState(0);
   const [mainPdfRendering, setMainPdfRendering] = useState(false);
@@ -427,6 +435,18 @@ export default function Lane({
       return;
     }
     onSetUrl(trimmed);
+    setShowUrlInput(false);
+    setUrlDraft("");
+  };
+
+  const submitUrlToAll = () => {
+    const trimmed = urlDraft.trim();
+    if (!trimmed) return;
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      alert("Please enter a valid URL starting with http:// or https://");
+      return;
+    }
+    onApplyUrlToAll?.(trimmed);
     setShowUrlInput(false);
     setUrlDraft("");
   };
@@ -1154,13 +1174,26 @@ export default function Lane({
 
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Opacity</span>
               <input
-                type="number"
-                min={0}
-                max={100}
-                value={overlayOpacity}
+                type="text"
+                inputMode="decimal"
+                value={opacityDraft ?? String(overlayOpacity)}
+                onFocus={(e) => {
+                  setOpacityDraft(String(overlayOpacity));
+                  e.target.select();
+                }}
                 onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (!Number.isNaN(n)) setOverlayOpacity(Math.min(100, Math.max(0, n)));
+                  const v = e.target.value;
+                  if (/^\d*\.?\d*$/.test(v)) setOpacityDraft(v);
+                }}
+                onBlur={() => {
+                  const n = Number(opacityDraft);
+                  if (opacityDraft !== null && opacityDraft !== "" && !Number.isNaN(n)) {
+                    setOverlayOpacity(Math.min(100, Math.max(0, n)));
+                  }
+                  setOpacityDraft(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
                 }}
                 className="shrink-0 text-right rounded outline-none"
                 style={{
@@ -1178,17 +1211,27 @@ export default function Lane({
 
               <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>Size</span>
               <input
-                type="number"
-                step={0.1}
-                min={Math.round(OVERLAY_MIN_SCALE * 100)}
-                max={Math.round(OVERLAY_MAX_SCALE * 100)}
-                value={Math.round(activeOverlay.scale * 1000) / 10}
+                type="text"
+                inputMode="decimal"
+                value={sizeDraft ?? String(Math.round(activeOverlay.scale * 1000) / 10)}
+                onFocus={(e) => {
+                  setSizeDraft(String(Math.round(activeOverlay.scale * 1000) / 10));
+                  e.target.select();
+                }}
                 onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (!Number.isNaN(n)) {
+                  const v = e.target.value;
+                  if (/^\d*\.?\d*$/.test(v)) setSizeDraft(v);
+                }}
+                onBlur={() => {
+                  const n = Number(sizeDraft);
+                  if (sizeDraft !== null && sizeDraft !== "" && !Number.isNaN(n)) {
                     const clamped = Math.min(OVERLAY_MAX_SCALE * 100, Math.max(OVERLAY_MIN_SCALE * 100, n));
                     updateOverlayItem(activeOverlay.id, { scale: clamped / 100 });
                   }
+                  setSizeDraft(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
                 }}
                 className="shrink-0 text-right rounded outline-none"
                 style={{
@@ -1309,6 +1352,16 @@ export default function Lane({
           >
             Load
           </button>
+          {onApplyUrlToAll && (
+            <button
+              onClick={submitUrlToAll}
+              className="text-xs px-2 py-1 rounded shrink-0 whitespace-nowrap"
+              style={{ background: "transparent", border: "1px solid var(--accent)", color: "var(--accent)" }}
+              title="Load this URL into every lane"
+            >
+              ⇒ Load to all
+            </button>
+          )}
           <button
             onClick={() => { setShowUrlInput(false); setUrlDraft(""); }}
             className="text-xs px-1 shrink-0"
