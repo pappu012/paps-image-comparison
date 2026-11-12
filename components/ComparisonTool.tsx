@@ -7,6 +7,7 @@ import DiffView from "./DiffView";
 import VisualCheck from "./VisualCheck";
 import { buildHtmlFolder, type HtmlFolderEntry } from "@/lib/htmlFolder";
 import { parseLanePresetConfig } from "@/lib/parseLanePresets";
+import { parseLaneZip, type ZipLaneCandidate } from "@/lib/parseLaneZip";
 
 export type FileAsset = {
   id: string;
@@ -111,11 +112,28 @@ function IconGrid() {
   );
 }
 
-function IconGear() {
+function IconSun() {
   return (
     <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10" cy="10" r="2.6" />
+      <circle cx="10" cy="10" r="3.4" />
       <path d="M10 2.8v2M10 15.2v2M17.2 10h-2M4.8 10h-2M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4M15.1 15.1l-1.4-1.4M6.3 6.3 4.9 4.9" />
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 12.3A6.8 6.8 0 0 1 7.7 4a6.8 6.8 0 1 0 8.3 8.3Z" />
+    </svg>
+  );
+}
+
+function IconLanesDefault() {
+  return (
+    <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="6" height="12" rx="1.3" />
+      <rect x="11" y="4" width="6" height="12" rx="1.3" />
     </svg>
   );
 }
@@ -311,8 +329,13 @@ export default function ComparisonTool() {
   };
 
   const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importMode, setImportMode] = useState<"paste" | "zip">("paste");
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  const [zipCandidates, setZipCandidates] = useState<ZipLaneCandidate[] | null>(null);
+  const [zipLoading, setZipLoading] = useState(false);
+  const [zipError, setZipError] = useState<string | null>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
 
   const addLanesFromPresetText = () => {
     try {
@@ -336,6 +359,58 @@ export default function ComparisonTool() {
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
     }
+  };
+
+  const handleZipFile = async (file: File) => {
+    setZipLoading(true);
+    setZipError(null);
+    setZipCandidates(null);
+    try {
+      const candidates = await parseLaneZip(file);
+      setZipCandidates(candidates);
+    } catch (err) {
+      setZipError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setZipLoading(false);
+    }
+  };
+
+  const updateZipCandidate = (idx: number, patch: Partial<ZipLaneCandidate>) => {
+    setZipCandidates((prev) => prev && prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  };
+
+  const removeZipCandidate = (idx: number) => {
+    setZipCandidates((prev) => prev && prev.filter((_, i) => i !== idx));
+  };
+
+  const resetZipImport = () => {
+    setZipCandidates(null);
+    setZipError(null);
+    if (zipInputRef.current) zipInputRef.current.value = "";
+  };
+
+  const addLanesFromZipCandidates = () => {
+    if (!zipCandidates || zipCandidates.length === 0) return;
+    const newLanes: LaneData[] = zipCandidates.map((c, i) => {
+      const fileName = c.path.split("/").pop() || `${c.label}.${c.ext.toLowerCase()}`;
+      const file = new File([c.blob], fileName, { type: c.mime });
+      const asset: FileAsset = {
+        id: `${Date.now()}-${i}`,
+        file,
+        url: URL.createObjectURL(file),
+        type: getAssetType(file),
+        ext: c.ext,
+      };
+      return {
+        id: `${Date.now()}-${i}-lane`,
+        label: c.label,
+        asset,
+        initialViewport: c.width && c.height ? { w: c.width, h: c.height } : null,
+      };
+    });
+    setLanes((prev) => [...prev, ...newLanes]);
+    resetZipImport();
+    setShowImportPanel(false);
   };
 
   const removeLane = (id: string) => {
@@ -533,50 +608,188 @@ export default function ComparisonTool() {
 
             {showImportPanel && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowImportPanel(false)} />
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => { setShowImportPanel(false); resetZipImport(); }}
+                />
                 <div
                   className="absolute left-full top-0 ml-2 z-50 w-80 rounded-3xl p-3 flex flex-col gap-2 glass-panel"
                   style={{ border: "1px solid var(--border)" }}
                 >
-                  <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: "var(--text-muted)" }}>
-                    Add lanes from a size list
-                  </p>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Paste an array of {"{ label, width, height }"} — one lane per entry, pre-sized for HTML/URL assets.
-                  </p>
-                  <textarea
-                    autoFocus
-                    value={importText}
-                    onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
-                    placeholder={'{ label: `MREC`, width: 300, height: 250 },\n{ label: `Leaderboard`, width: 728, height: 90 },'}
-                    rows={8}
-                    className="text-xs rounded-lg p-2 outline-none font-mono"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                      resize: "vertical",
-                    }}
-                  />
-                  {importError && (
-                    <p className="text-xs" style={{ color: "#e5877a" }}>{importError}</p>
-                  )}
-                  <div className="flex items-center gap-2 justify-end">
+                  <div
+                    className="flex items-center rounded-full p-0.5 text-xs self-start"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
+                  >
                     <button
-                      onClick={() => { setShowImportPanel(false); setImportError(null); }}
-                      className="text-xs px-3 py-1.5 rounded-full"
-                      style={{ color: "var(--text-muted)" }}
+                      onClick={() => setImportMode("paste")}
+                      className="px-3 py-1 rounded-full font-medium transition-colors"
+                      style={{
+                        background: importMode === "paste" ? "var(--accent)" : "transparent",
+                        color: importMode === "paste" ? "var(--accent-text)" : "var(--text-muted)",
+                      }}
                     >
-                      Cancel
+                      Paste list
                     </button>
                     <button
-                      onClick={addLanesFromPresetText}
-                      className="text-xs px-3 py-1.5 rounded-full font-medium"
-                      style={{ background: "var(--accent)", color: "var(--accent-text)" }}
+                      onClick={() => setImportMode("zip")}
+                      className="px-3 py-1 rounded-full font-medium transition-colors"
+                      style={{
+                        background: importMode === "zip" ? "var(--accent)" : "transparent",
+                        color: importMode === "zip" ? "var(--accent-text)" : "var(--text-muted)",
+                      }}
                     >
-                      Add Lanes
+                      Upload zip
                     </button>
                   </div>
+
+                  {importMode === "paste" ? (
+                    <>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        Paste an array of {"{ label, width, height }"} — one lane per entry, pre-sized for HTML/URL assets.
+                      </p>
+                      <textarea
+                        autoFocus
+                        value={importText}
+                        onChange={(e) => { setImportText(e.target.value); setImportError(null); }}
+                        placeholder={'{ label: `MREC`, width: 300, height: 250 },\n{ label: `Leaderboard`, width: 728, height: 90 },'}
+                        rows={8}
+                        className="text-xs rounded-lg p-2 outline-none font-mono"
+                        style={{
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text)",
+                          resize: "vertical",
+                        }}
+                      />
+                      {importError && (
+                        <p className="text-xs" style={{ color: "#e5877a" }}>{importError}</p>
+                      )}
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => { setShowImportPanel(false); setImportError(null); }}
+                          className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={addLanesFromPresetText}
+                          className="text-xs px-3 py-1.5 rounded-full font-medium"
+                          style={{ background: "var(--accent)", color: "var(--accent-text)" }}
+                        >
+                          Add Lanes
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        Upload a .zip of creatives (images, video, PDF) — one lane per file, loaded with its asset. Sizes like{" "}
+                        <code>300x250</code> in a filename are picked up automatically; check each detected lane below before adding.
+                      </p>
+
+                      {!zipCandidates && (
+                        <button
+                          onClick={() => zipInputRef.current?.click()}
+                          disabled={zipLoading}
+                          className="text-xs rounded-lg p-3 border border-dashed text-center transition-colors disabled:opacity-50"
+                          style={{ borderColor: "var(--border-strong)", color: "var(--text-muted)" }}
+                        >
+                          {zipLoading ? "Reading zip…" : "Choose a .zip file"}
+                        </button>
+                      )}
+                      <input
+                        ref={zipInputRef}
+                        type="file"
+                        accept=".zip,application/zip"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleZipFile(file);
+                        }}
+                      />
+
+                      {zipError && (
+                        <p className="text-xs" style={{ color: "#e5877a" }}>{zipError}</p>
+                      )}
+
+                      {zipCandidates && (
+                        <>
+                          <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: "var(--text-muted)" }}>
+                            {zipCandidates.length} lane{zipCandidates.length === 1 ? "" : "s"} detected — check the template
+                          </p>
+                          <div className="flex flex-col gap-1.5 max-h-64 overflow-auto scrollbar-thin pr-0.5">
+                            {zipCandidates.map((c, i) => (
+                              <div
+                                key={c.path}
+                                className="flex items-center gap-1.5 rounded-lg p-1.5"
+                                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                              >
+                                <span
+                                  className="text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0"
+                                  style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                                >
+                                  {c.ext}
+                                </span>
+                                <input
+                                  value={c.label}
+                                  onChange={(e) => updateZipCandidate(i, { label: e.target.value })}
+                                  className="text-xs bg-transparent outline-none flex-1 min-w-0"
+                                  style={{ color: "var(--text)" }}
+                                  title={c.path}
+                                />
+                                <input
+                                  type="number"
+                                  value={c.width ?? ""}
+                                  onChange={(e) => updateZipCandidate(i, { width: e.target.value ? Number(e.target.value) : null })}
+                                  placeholder="w"
+                                  className="text-xs bg-transparent outline-none w-10 text-center"
+                                  style={{ color: c.width ? "var(--text)" : "#e5877a" }}
+                                />
+                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>×</span>
+                                <input
+                                  type="number"
+                                  value={c.height ?? ""}
+                                  onChange={(e) => updateZipCandidate(i, { height: e.target.value ? Number(e.target.value) : null })}
+                                  placeholder="h"
+                                  className="text-xs bg-transparent outline-none w-10 text-center"
+                                  style={{ color: c.height ? "var(--text)" : "#e5877a" }}
+                                />
+                                <button
+                                  onClick={() => removeZipCandidate(i)}
+                                  title="Skip this file"
+                                  className="hover-text shrink-0"
+                                  style={{ color: "var(--text-muted)" }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => { setShowImportPanel(false); resetZipImport(); }}
+                          className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Cancel
+                        </button>
+                        {zipCandidates && (
+                          <button
+                            onClick={addLanesFromZipCandidates}
+                            disabled={zipCandidates.length === 0}
+                            className="text-xs px-3 py-1.5 rounded-full font-medium disabled:opacity-40"
+                            style={{ background: "var(--accent)", color: "var(--accent-text)" }}
+                          >
+                            Add {zipCandidates.length} Lane{zipCandidates.length === 1 ? "" : "s"}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -587,7 +800,7 @@ export default function ComparisonTool() {
             <IconInfo />
           </RailIcon>
           <RailIcon title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} label="Theme" onClick={toggleTheme}>
-            <IconGear />
+            {theme === "dark" ? <IconSun /> : <IconMoon />}
           </RailIcon>
 
           {showInfoPopup && (
@@ -639,7 +852,7 @@ export default function ComparisonTool() {
             {/* Advanced view modes */}
             <div
               className="flex items-center rounded-full p-1 text-xs"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+              style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
             >
               {(
                 [
@@ -710,10 +923,12 @@ export default function ComparisonTool() {
               </button>
             </div>
 
+            <div aria-hidden className="w-px h-6 shrink-0" style={{ background: "var(--border-strong)" }} />
+
             {/* Zoom */}
             <div
               className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+              style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text-muted)" }}
             >
               <button
                 onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
@@ -775,6 +990,8 @@ export default function ComparisonTool() {
               </button>
             </div>
 
+            <div aria-hidden className="w-px h-6 shrink-0" style={{ background: "var(--border-strong)" }} />
+
             <button
               onClick={refreshAllPanels}
               title="Refresh all panels"
@@ -812,7 +1029,7 @@ export default function ComparisonTool() {
               className="icon-pill w-9 h-9"
               style={{ color: "#e5877a" }}
             >
-              <IconRefresh />
+              <IconLanesDefault />
             </button>
           </div>
         </header>

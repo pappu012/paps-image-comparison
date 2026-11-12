@@ -15,6 +15,7 @@
   --accent-text: #12203a;
   --glass-blur: 22px;
   --shadow-glass: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --border-strong: rgba(255, 255, 255, 0.16);
 }
 
 /* Light theme */
@@ -31,6 +32,7 @@
   --accent-text: #f4f7fd;
   --glass-blur: 22px;
   --shadow-glass: 0 20px 50px rgba(20, 25, 40, 0.12);
+  --border-strong: rgba(20, 25, 35, 0.18);
 }
 
 * {
