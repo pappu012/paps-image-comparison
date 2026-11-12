@@ -569,7 +569,7 @@ export default function ComparisonTool() {
   return (
     <div className="h-screen w-full flex items-stretch justify-center p-[0.05rem] sm:p-[0.3em] gap-[0.2em] ">
       {/* Icon rail */}
-      <aside className="flex flex-col items-center justify-between py-4 rounded-3xl glass-panel w-16 shrink-0">
+      <aside className="flex flex-col items-center justify-between py-4 rounded-[5px] glass-panel w-16 shrink-0">
         <div className="flex flex-col items-center gap-2.5 w-full px-1">
           <RailIcon active={viewMode === "side-by-side"} title="Side by side" label="Split" onClick={() => setViewMode("side-by-side")}>
             <IconHouse />
@@ -833,17 +833,22 @@ export default function ComparisonTool() {
       </aside>
 
       {/* Main glass panel */}
-      <div className="flex flex-col flex-1 min-w-0 rounded-3xl glass-panel overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 rounded-[5px] glass-panel overflow-hidden">
         {/* Header */}
         <header
           className="flex items-center justify-between gap-2 px-1 sm:px-5 py-1 shrink-0 flex-wrap"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <div>
-            <h1 className="text-[20px] font-semibold tracking-tight" style={{ color: "var(--text)" }}>
+          <div className="flex items-center gap-2 min-w-0 pl-3 sm:pl-0">
+            <span className="text-[19px] font-bold tracking-tight shrink-0" style={{ color: "var(--text)" }}>
+              sesimi
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--accent)" }} aria-hidden />
+            <h1 className="text-[15px] font-semibold tracking-tight truncate shrink-0" style={{ color: "var(--text)" }}>
               Asset Comparison
             </h1>
-            <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
+            <span aria-hidden className="w-px h-4 shrink-0 hidden md:block" style={{ background: "var(--border-strong)" }} />
+            <p className="text-xs truncate hidden md:block" style={{ color: "var(--text-muted)" }}>
               {dateStr ? `${dateStr} · ` : ""}{filledLanes.length}/{lanes.length} lanes loaded
             </p>
           </div>

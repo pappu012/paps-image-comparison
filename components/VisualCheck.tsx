@@ -487,7 +487,7 @@ export default function VisualCheck({ lanes, onBack }: Props) {
                                 <span key={t} style={{
                                   fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
                                   padding: "2px 7px", borderRadius: 3,
-                                  background: "rgba(91,141,239,0.12)", color: "rgba(91,141,239,1)",
+                                  background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)",
                                 }}>
                                   {t}
                                 </span>

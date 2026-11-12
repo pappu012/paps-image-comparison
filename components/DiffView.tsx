@@ -335,7 +335,7 @@ export default function DiffView({ lanes, zoom, onBack }: Props) {
                             style={{
                               fontSize: 10, fontWeight: 600, letterSpacing: "0.04em",
                               padding: "2px 8px", borderRadius: 3,
-                              background: "rgba(91,141,239,0.12)", color: "rgba(91,141,239,1)",
+                              background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)",
                               cursor: CHANGE_TYPE_HINTS[t] ? "help" : undefined,
                             }}
                           >

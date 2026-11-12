@@ -87,7 +87,7 @@ export default function HtmlPreview({
             left: originX - 1,
             width: viewportW! * scale + 2,
             height: viewportH! * scale + 2,
-            border: "1px solid rgba(91,141,239,0.35)",
+            border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
             pointerEvents: "none",
             borderRadius: 1,
           }}

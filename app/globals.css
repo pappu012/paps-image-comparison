@@ -1,38 +1,38 @@
 @import "tailwindcss";
 
-/* Dark theme (default) — elegant blue glass */
+/* Dark theme (default) — colours sampled directly from the Sesimi EDM Checker reference */
 :root,
 [data-theme="dark"] {
-  --bg: #15161a;
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-2: rgba(255, 255, 255, 0.045);
-  --surface-solid: #1e2026;
-  --border: rgba(255, 255, 255, 0.1);
-  --text: #eef1f6;
-  --text-muted: rgba(238, 241, 246, 0.56);
-  --accent: #6f9ce0;
-  --accent-hover: #5c8ad4;
-  --accent-text: #12203a;
-  --glass-blur: 22px;
-  --shadow-glass: 0 20px 60px rgba(0, 0, 0, 0.45);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --bg: #080f11;
+  --surface: #0f1a1d;
+  --surface-2: #0c1719;
+  --surface-solid: #0f1a1d;
+  --border: #213135;
+  --text: #ffffff;
+  --text-muted: #8d9293;
+  --accent: #dafe62;
+  --accent-hover: #c5e84c;
+  --accent-text: #0d292d;
+  --glass-blur: 0px;
+  --shadow-glass: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --border-strong: #2c4448;
 }
 
 /* Light theme */
 [data-theme="light"] {
-  --bg: #eceef2;
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-2: rgba(255, 255, 255, 0.5);
+  --bg: #f3f6f6;
+  --surface: #ffffff;
+  --surface-2: #edf3f3;
   --surface-solid: #ffffff;
-  --border: rgba(20, 25, 35, 0.1);
-  --text: #1c1e24;
-  --text-muted: #666b75;
-  --accent: #4472c4;
-  --accent-hover: #375ea8;
-  --accent-text: #f4f7fd;
-  --glass-blur: 22px;
-  --shadow-glass: 0 20px 50px rgba(20, 25, 40, 0.12);
-  --border-strong: rgba(20, 25, 35, 0.18);
+  --border: #d8e2e3;
+  --text: #0d292d;
+  --text-muted: #5b7378;
+  --accent: #0d292d;
+  --accent-hover: #113338;
+  --accent-text: #ffffff;
+  --glass-blur: 0px;
+  --shadow-glass: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --border-strong: #bfd0d1;
 }
 
 * {
@@ -55,38 +55,21 @@ button:disabled {
 }
 
 body {
-  background:
-    radial-gradient(circle at 12% 15%, rgba(111, 156, 224, 0.22), transparent 50%),
-    radial-gradient(circle at 85% 10%, rgba(160, 180, 210, 0.14), transparent 55%),
-    radial-gradient(circle at 75% 90%, rgba(90, 110, 160, 0.18), transparent 55%),
-    linear-gradient(160deg, #23262e 0%, #171920 55%, #101114 100%);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   margin: 0;
   min-height: 100vh;
 }
 
-[data-theme="light"] body {
-  background:
-    radial-gradient(circle at 12% 15%, rgba(190, 210, 235, 0.55), transparent 50%),
-    radial-gradient(circle at 85% 10%, rgba(200, 210, 225, 0.4), transparent 55%),
-    linear-gradient(160deg, #f2f4f8 0%, #e7eaf0 100%);
-  background-attachment: fixed;
-}
-
 .glass-panel {
   background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border);
   box-shadow: var(--shadow-glass);
 }
 
 .glass-card {
   background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border);
 }
 

@@ -736,7 +736,7 @@ export default function Lane({
             style={{
               width: 64, fontSize: 11, textAlign: "center",
               padding: "1px 4px", borderRadius: 3, outline: "none",
-              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
+              background: customActive ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "var(--surface)",
               border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
               color: "var(--text)",
             }}
@@ -761,7 +761,7 @@ export default function Lane({
             style={{
               width: 64, fontSize: 11, textAlign: "center",
               padding: "1px 4px", borderRadius: 3, outline: "none",
-              background: customActive ? "rgba(91,141,239,0.12)" : "var(--surface)",
+              background: customActive ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "var(--surface)",
               border: `1px solid ${customActive ? "var(--accent)" : "var(--border)"}`,
               color: "var(--text)",
             }}
