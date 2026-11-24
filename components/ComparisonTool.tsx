@@ -8,6 +8,7 @@ import VisualCheck from "./VisualCheck";
 import { buildHtmlFolder, type HtmlFolderEntry } from "@/lib/htmlFolder";
 import { parseLanePresetConfig } from "@/lib/parseLanePresets";
 import { parseLaneZip, type ZipLaneCandidate } from "@/lib/parseLaneZip";
+import HowToUse from "./HowToUse";
 
 export type FileAsset = {
   id: string;
@@ -31,7 +32,7 @@ export type CursorPos = { x: number; y: number } | null;
 
 export type StickyGuide = { id: string; x: number; y: number; color: string };
 
-const DEFAULT_LABELS = ["Main", "Supplied"];
+const DEFAULT_LABELS = ["Main"];
 const DEFAULT_GUIDE_COLOR = "#ffdc1e";
 
 function RailIcon({
@@ -40,17 +41,23 @@ function RailIcon({
   label,
   onClick,
   children,
+  dataTour,
+  pulse,
 }: {
   active?: boolean;
   title: string;
   label: string;
   onClick: () => void;
   children: React.ReactNode;
+  dataTour?: string;
+  pulse?: boolean;
 }) {
+  const highlight = pulse && !active;
   return (
     <button
       onClick={onClick}
       title={title}
+      data-tour={dataTour}
       className="flex flex-col items-center gap-1 shrink-0 w-full"
     >
       <span
@@ -58,6 +65,8 @@ function RailIcon({
         style={
           active
             ? { background: "var(--accent)", borderColor: "var(--accent)", color: "var(--accent-text)" }
+            : highlight
+            ? { borderColor: "var(--accent)", color: "var(--accent)", animation: "rail-attention 1.8s ease-out infinite" }
             : undefined
         }
       >
@@ -65,7 +74,7 @@ function RailIcon({
       </span>
       <span
         className="text-[9px] font-medium leading-none"
-        style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
+        style={{ color: active || highlight ? "var(--accent)" : "var(--text-muted)" }}
       >
         {label}
       </span>
@@ -183,6 +192,16 @@ function IconInfo() {
   );
 }
 
+function IconHelp() {
+  return (
+    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="10" r="7.2" />
+      <path d="M8 7.8a2 2 0 1 1 2.8 1.9c-.6.3-.9.7-.9 1.4v.4" />
+      <circle cx="10" cy="14" r="0.15" fill="currentColor" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function IconMagnifier() {
   return (
     <svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -251,6 +270,27 @@ export default function ComparisonTool() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [dateStr, setDateStr] = useState("");
   const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  // Pulse the Help button until it's been opened once (persisted per browser).
+  const [helpSeen, setHelpSeen] = useState(true);
+
+  useEffect(() => {
+    try {
+      setHelpSeen(localStorage.getItem("paps-help-seen") === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const openHelp = useCallback(() => {
+    setShowHelp(true);
+    setHelpSeen(true);
+    try {
+      localStorage.setItem("paps-help-seen", "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [editingZoom, setEditingZoom] = useState(false);
   const [zoomDraft, setZoomDraft] = useState("");
   const [refreshSignal, setRefreshSignal] = useState(0);
@@ -534,6 +574,36 @@ export default function ComparisonTool() {
     });
   };
 
+  // Loads a ready-made comparison so new users have something live to explore —
+  // the Sesimi site added as several pre-sized lanes (device + ad sizes), shown
+  // in a grid, zoomed out with guides on so zoom and alignment are demoed too.
+  const loadDemo = useCallback(() => {
+    const url = "https://sesimi.com";
+    const now = Date.now();
+    const DEMO_LANES: { label: string; w: number; h: number }[] = [
+      { label: "Sesimi — Desktop", w: 1440, h: 900 },
+      { label: "Sesimi — Mobile", w: 390, h: 844 },
+      { label: "MREC 300×250", w: 300, h: 250 },
+      { label: "Leaderboard 728×90", w: 728, h: 90 },
+    ];
+    const demo: LaneData[] = DEMO_LANES.map((d, i) => ({
+      id: `demo-${now}-${i}`,
+      label: d.label,
+      initialViewport: { w: d.w, h: d.h },
+      asset: { id: `demo-a-${now}-${i}`, file: null, url, type: "url", ext: "URL", displayName: url },
+    }));
+    setLanes((prev) => {
+      prev.forEach((l) => {
+        if (l.asset && l.asset.type !== "url") URL.revokeObjectURL(l.asset.url);
+      });
+      return demo;
+    });
+    setViewMode("grid");
+    setZoom(0.5);
+    setShowGuides(true);
+    setStickyGuides([]);
+  }, []);
+
   const clearAll = () => {
     if (!window.confirm("Clear all loaded assets from every lane? This can't be undone.")) return;
     lanes.forEach((l) => {
@@ -571,18 +641,19 @@ export default function ComparisonTool() {
       {/* Icon rail */}
       <aside className="flex flex-col items-center justify-between py-4 rounded-[5px] glass-panel w-16 shrink-0">
         <div className="flex flex-col items-center gap-2.5 w-full px-1">
-          <RailIcon active={viewMode === "side-by-side"} title="Side by side" label="Split" onClick={() => setViewMode("side-by-side")}>
+          <RailIcon dataTour="mode-split" active={viewMode === "side-by-side"} title="Side by side" label="Split" onClick={() => setViewMode("side-by-side")}>
             <IconHouse />
           </RailIcon>
-          <RailIcon active={viewMode === "stacked"} title="Stacked" label="Stack" onClick={() => setViewMode("stacked")}>
+          <RailIcon dataTour="mode-stack" active={viewMode === "stacked"} title="Stacked" label="Stack" onClick={() => setViewMode("stacked")}>
             <IconLayers />
           </RailIcon>
-          <RailIcon active={viewMode === "grid"} title="Grid" label="Grid" onClick={() => setViewMode("grid")}>
+          <RailIcon dataTour="mode-grid" active={viewMode === "grid"} title="Grid" label="Grid" onClick={() => setViewMode("grid")}>
             <IconGrid />
           </RailIcon>
           <button
             onClick={addLane}
             title="Add lane"
+            data-tour="add-lane"
             className="flex flex-col items-center gap-1 shrink-0 w-full"
           >
             <span
@@ -598,6 +669,7 @@ export default function ComparisonTool() {
 
           <div className="relative w-full flex flex-col items-center">
             <RailIcon
+              dataTour="import"
               active={showImportPanel}
               title="Add lanes from a pasted list of { label, width, height }"
               label="Import"
@@ -795,7 +867,10 @@ export default function ComparisonTool() {
             )}
           </div>
         </div>
-        <div className="flex flex-col items-center gap-2.5 w-full px-1 relative">
+        <div data-tour="utilities" className="flex flex-col items-center gap-2.5 w-full px-1 relative">
+          <RailIcon title="How to use — tour & reference" label="Help" pulse={!helpSeen} onClick={openHelp}>
+            <IconHelp />
+          </RailIcon>
           <RailIcon active={showInfoPopup} title="Lanes & supported formats" label="Info" onClick={() => setShowInfoPopup((v) => !v)}>
             <IconInfo />
           </RailIcon>
@@ -868,6 +943,7 @@ export default function ComparisonTool() {
               ).map(({ mode, label, disabled, hint, desc }) => (
                 <button
                   key={mode}
+                  data-tour={`view-${mode}`}
                   onClick={() => setViewMode(mode)}
                   disabled={disabled}
                   className="px-3 py-1.5 rounded-full font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -881,6 +957,7 @@ export default function ComparisonTool() {
                 </button>
               ))}
               <button
+                data-tour="guides"
                 onClick={() => setShowGuides((g) => !g)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
                 style={{
@@ -915,6 +992,7 @@ export default function ComparisonTool() {
                 </div>
               )}
               <button
+                data-tour="magnify"
                 onClick={() => setShowMagnifier((m) => !m)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
                 style={{
@@ -932,6 +1010,7 @@ export default function ComparisonTool() {
 
             {/* Zoom */}
             <div
+              data-tour="zoom"
               className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
               style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text-muted)" }}
             >
@@ -1040,7 +1119,7 @@ export default function ComparisonTool() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-hidden">
+        <main data-tour="workspace" className="flex-1 overflow-hidden">
           {viewMode === "check" ? (
           <VisualCheck lanes={lanes} onBack={goBack} />
         ) : viewMode === "diff" ? (
@@ -1108,6 +1187,8 @@ export default function ComparisonTool() {
         )}
         </main>
       </div>
+
+      <HowToUse helpOpen={showHelp} onCloseHelp={() => setShowHelp(false)} onLoadDemo={loadDemo} />
     </div>
   );
 }

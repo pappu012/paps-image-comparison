@@ -112,6 +112,19 @@ body {
   50%       { opacity: 0.9; }
 }
 
+/* Attention ring for the Help button — expands and fades until first opened */
+@keyframes rail-attention {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
 @keyframes vc-size-pulse {
   0%, 100% {
     transform: scale(1);
